@@ -1,6 +1,6 @@
 [Unit]
 Description=MOTU UltraLite mk5 control daemon
-Documentation=https://github.com/thehighnotes/motu-mk5-linux
+Documentation=https://github.com/MarkWind85/motu-mk5-linux
 After=pipewire.service
 
 [Service]

@@ -27,3 +27,22 @@ nix = { version = "0.29", features = ["signal"] }
 [profile.release]
 opt-level = 2
 strip = true
+
+[package.metadata.deb]
+maintainer = "MarkWind85"
+depends = "libasound2, pipewire, wireplumber"
+section = "sound"
+priority = "optional"
+assets = [
+    ["target/release/motu-mk5d", "usr/bin/", "755"],
+    ["target/release/motu-ctl", "usr/bin/", "755"],
+    ["install/alsa-card-profile/motu-ultralite-mk5.conf", "usr/share/alsa-card-profile/mixer/profile-sets/", "644"],
+    ["install/udev/89-motu-mk5.rules", "etc/udev/rules.d/", "644"],
+    ["install/wireplumber/51-motu-mk5.lua", "usr/share/wireplumber/main.lua.d/", "644"],
+    ["install/systemd/motu-mk5d.service", "usr/lib/systemd/user/", "644"],
+    ["README.md", "usr/share/doc/motu-mk5/", "644"],
+]
+conf-files = [
+    "/etc/udev/rules.d/89-motu-mk5.rules",
+]
+maintainer-scripts = "debian/"
