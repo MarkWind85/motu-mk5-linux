@@ -1,0 +1,18 @@
+/target
+*.swp
+*.swo
+*~
+
+# Claude / AI tooling
+.claude/
+CLAUDE.md
+docs/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
