@@ -67,6 +67,13 @@ Select these in GNOME Sound Settings under Configuration:
 
 Output and input profiles are independent — pick any output with any input.
 
+### Coming soon
+
+- Mixer, EQ, compressor, gate, and reverb control via `motu-ctl`
+- Preamp gain, 48V phantom power, and pad control
+- Full output routing configuration
+- State persistence across reboots — your settings restored automatically on plug-in
+
 ### CLI tool
 
 ```bash
