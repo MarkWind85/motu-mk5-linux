@@ -11,6 +11,7 @@ table.insert(alsa_monitor.rules, {
     ["device.description"] = "MOTU UltraLite mk5",
     ["device.nick"] = "MOTU mk5",
     ["device.profile-set"] = "motu-ultralite-mk5.conf",
+    ["device.profile"] = "output:out-main",
   },
 })
 

@@ -4,6 +4,11 @@ set -e
 udevadm control --reload-rules 2>/dev/null || true
 udevadm trigger --subsystem-match=sound 2>/dev/null || true
 
+# Clear cached MOTU profile so WirePlumber uses device.profile from our rules
+for f in /home/*/.local/state/wireplumber/default-profile; do
+    sed -i '/alsa_card.usb-MOTU_UltraLite/d' "$f" 2>/dev/null
+done
+
 echo ""
 echo "motu-mk5 installed. Replug the UltraLite mk5 or restart PipeWire:"
 echo "  systemctl --user restart pipewire pipewire-pulse wireplumber"
