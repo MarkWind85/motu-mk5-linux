@@ -26,35 +26,7 @@ After install:
 
 ### Install
 
-**Debian / Ubuntu / Pop!_OS / Mint**
-
-Download the `.deb` from [Releases](https://github.com/MarkWind85/motu-mk5-linux/releases):
-
-```bash
-sudo dpkg -i motu-mk5_0.1.0-1_amd64.deb
-```
-
-**Arch Linux**
-
-```bash
-# From the AUR or build manually:
-cd pkg/arch
-makepkg -si
-```
-
-**Fedora**
-
-```bash
-# Build from the spec:
-rpmbuild -ba pkg/rpm/motu-mk5.spec
-sudo rpm -i ~/rpmbuild/RPMS/x86_64/motu-mk5-0.1.0-1.*.rpm
-```
-
-Then replug your mk5, or restart PipeWire:
-
-```bash
-systemctl --user restart pipewire pipewire-pulse wireplumber
-```
+See [Releases](https://github.com/MarkWind85/motu-mk5-linux/releases) for install packages and instructions.
 
 ### Available profiles
 
