@@ -1,0 +1,26 @@
+pkgname=motu-mk5
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Native Linux integration for the MOTU UltraLite mk5"
+arch=('x86_64')
+url="https://github.com/MarkWind85/motu-mk5-linux"
+license=('GPL-2.0-or-later')
+depends=('pipewire' 'wireplumber' 'alsa-lib')
+makedepends=('rust' 'cargo')
+source=("$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+build() {
+    cd "$pkgname-linux-$pkgver"
+    cargo build --release
+}
+
+package() {
+    cd "$pkgname-linux-$pkgver"
+    install -Dm755 target/release/motu-mk5d "$pkgdir/usr/bin/motu-mk5d"
+    install -Dm755 target/release/motu-ctl "$pkgdir/usr/bin/motu-ctl"
+    install -Dm644 install/alsa-card-profile/motu-ultralite-mk5.conf "$pkgdir/usr/share/alsa-card-profile/mixer/profile-sets/motu-ultralite-mk5.conf"
+    install -Dm644 install/wireplumber/51-motu-mk5.lua "$pkgdir/usr/share/wireplumber/main.lua.d/51-motu-mk5.lua"
+    install -Dm644 install/udev/89-motu-mk5.rules "$pkgdir/etc/udev/rules.d/89-motu-mk5.rules"
+    install -Dm644 install/systemd/motu-mk5d.service "$pkgdir/usr/lib/systemd/user/motu-mk5d.service"
+}

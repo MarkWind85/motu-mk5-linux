@@ -21,21 +21,36 @@ After install:
 
 ### Requirements
 
-- Debian-based distro (Ubuntu 22.04+, Pop!_OS, Linux Mint, etc.)
 - PipeWire + WirePlumber
 - MOTU UltraLite mk5
 
-> Other distros (Fedora, Arch, etc.) can build from source — see the developer section below. Packaged support for those is planned.
-
 ### Install
 
-Download the `.deb` from [Releases](https://github.com/MarkWind85/motu-mk5-linux/releases), then:
+**Debian / Ubuntu / Pop!_OS / Mint**
+
+Download the `.deb` from [Releases](https://github.com/MarkWind85/motu-mk5-linux/releases):
 
 ```bash
 sudo dpkg -i motu-mk5_0.1.0-1_amd64.deb
 ```
 
-Replug your mk5, or restart PipeWire:
+**Arch Linux**
+
+```bash
+# From the AUR or build manually:
+cd pkg/arch
+makepkg -si
+```
+
+**Fedora**
+
+```bash
+# Build from the spec:
+rpmbuild -ba pkg/rpm/motu-mk5.spec
+sudo rpm -i ~/rpmbuild/RPMS/x86_64/motu-mk5-0.1.0-1.*.rpm
+```
+
+Then replug your mk5, or restart PipeWire:
 
 ```bash
 systemctl --user restart pipewire pipewire-pulse wireplumber
