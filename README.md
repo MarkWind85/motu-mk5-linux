@@ -39,12 +39,6 @@ Replug your mk5, or restart PipeWire:
 systemctl --user restart pipewire pipewire-pulse wireplumber
 ```
 
-### Uninstall
-
-```bash
-sudo dpkg -r motu-mk5
-```
-
 ### Available profiles
 
 Select these in GNOME Sound Settings under Configuration:
