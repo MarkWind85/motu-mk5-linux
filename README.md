@@ -2,7 +2,7 @@
 
 Native Linux integration for the MOTU UltraLite mk5 audio interface.
 
-**Status: Work in Progress** — Audio I/O and system integration are working. Device control plane (mixer, EQ, routing) is under development.
+**Status: Work in Progress** — Audio I/O and system integration are working. For mixer, EQ, and routing control, use [CueMix5 for Linux](https://github.com/schaefsteven/com.motu.CueMix5-1.0.0).
 
 ---
 
