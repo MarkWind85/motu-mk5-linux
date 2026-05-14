@@ -10,7 +10,7 @@ Native Linux integration for the MOTU UltraLite mk5 audio interface.
 
 ### What this does
 
-Installs a single `.deb` package that makes the MOTU UltraLite mk5 work natively on Linux. No manual configuration, no workarounds.
+Makes the MOTU UltraLite mk5 work natively on Linux. No manual configuration, no workarounds.
 
 After install:
 - All physical I/O pairs appear as selectable profiles in GNOME Sound Settings
