@@ -69,7 +69,7 @@ Output and input profiles are independent — pick any output with any input.
 
 ### MIDI
 
-MIDI I/O is available through the mk5's USB MIDI interface. MIDI support in PipeWire is automatic — no additional configuration needed.
+MIDI support is coming.
 
 ### CLI tool
 
