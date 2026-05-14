@@ -1,7 +1,6 @@
 -- MOTU UltraLite mk5 — dynamic WirePlumber configuration
--- Applied when the device is detected, no hardcoded ALSA paths
 
--- Configure the ALSA card device
+-- Configure the ALSA card device to use our custom profile set
 table.insert(alsa_monitor.rules, {
   matches = {
     {
@@ -11,6 +10,7 @@ table.insert(alsa_monitor.rules, {
   apply_properties = {
     ["device.description"] = "MOTU UltraLite mk5",
     ["device.nick"] = "MOTU mk5",
+    ["device.profile-set"] = "motu-ultralite-mk5.conf",
   },
 })
 

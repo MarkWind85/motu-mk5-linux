@@ -1,4 +1,6 @@
-# MOTU UltraLite mk5 - trigger daemon on USB attach
+# MOTU UltraLite mk5 — use custom ACP profile set
+ACTION=="change", SUBSYSTEM=="sound", KERNEL=="card*", ATTRS{idVendor}=="07fd", ATTRS{idProduct}=="000c", ENV{ACP_PROFILE_SET}="motu-ultralite-mk5.conf"
+# Trigger daemon on USB attach
 ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="07fd", ATTR{idProduct}=="000c", TAG+="systemd", ENV{SYSTEMD_USER_WANTS}="motu-mk5d.service"
 # Grant audio group access to raw MIDI
 ACTION=="add", SUBSYSTEM=="sound", ATTRS{idVendor}=="07fd", ATTRS{idProduct}=="000c", MODE="0660", GROUP="audio"
