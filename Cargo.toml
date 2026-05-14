@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 description = "Native Linux integration for the MOTU UltraLite mk5 audio interface"
 license = "GPL-2.0-or-later"
-repository = "https://github.com/thehighnotes/motu-mk5-linux"
+repository = "https://github.com/MarkWind85/motu-mk5-linux"
 
 [[bin]]
 name = "motu-mk5d"
