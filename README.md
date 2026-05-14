@@ -21,9 +21,11 @@ After install:
 
 ### Requirements
 
-- Ubuntu 22.04+, Pop!_OS, or any Debian-based distro
-- PipeWire + WirePlumber (standard on modern Ubuntu/Pop!_OS/Fedora)
+- Debian-based distro (Ubuntu 22.04+, Pop!_OS, Linux Mint, etc.)
+- PipeWire + WirePlumber
 - MOTU UltraLite mk5
+
+> Other distros (Fedora, Arch, etc.) can build from source — see the developer section below. Packaged support for those is planned.
 
 ### Install
 
