@@ -2,3 +2,17 @@
 set -e
 
 udevadm control --reload-rules 2>/dev/null || true
+
+if [ "$1" = "remove" ] || [ "$1" = "purge" ]; then
+    for d in /home/*; do
+        [ -d "$d" ] || continue
+        rm -f "$d/.config/systemd/user/wireplumber.service.d/motu-mk5.conf" 2>/dev/null || true
+        rmdir "$d/.config/systemd/user/wireplumber.service.d" 2>/dev/null || true
+    done
+    loginctl list-users --no-legend 2>/dev/null | awk '{print $1}' | while read -r uid; do
+        [ -n "$uid" ] || continue
+        su_user=$(getent passwd "$uid" | cut -d: -f1)
+        [ -n "$su_user" ] || continue
+        su -l "$su_user" -c "XDG_RUNTIME_DIR=/run/user/$uid systemctl --user disable --now motu-mk5-update.timer" 2>/dev/null || true
+    done
+fi

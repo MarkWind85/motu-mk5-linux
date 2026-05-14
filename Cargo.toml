@@ -1,6 +1,6 @@
 [package]
 name = "motu-mk5"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2024"
 description = "Native Linux integration for the MOTU UltraLite mk5 audio interface"
 license = "GPL-2.0-or-later"
@@ -40,6 +40,7 @@ assets = [
     ["install/udev/89-motu-mk5.rules", "etc/udev/rules.d/", "644"],
     ["install/wireplumber/51-motu-mk5.lua", "usr/share/wireplumber/main.lua.d/", "644"],
     ["install/systemd/motu-mk5d.service", "usr/lib/systemd/user/", "644"],
+    ["install/systemd/wireplumber-motu-mk5.conf", "usr/share/motu-mk5/", "644"],
     ["README.md", "usr/share/doc/motu-mk5/", "644"],
 ]
 conf-files = [

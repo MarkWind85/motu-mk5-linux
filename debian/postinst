@@ -4,11 +4,36 @@ set -e
 udevadm control --reload-rules 2>/dev/null || true
 udevadm trigger --subsystem-match=sound 2>/dev/null || true
 
-# Clear cached MOTU profile so WirePlumber uses device.profile from our rules
-for f in /home/*/.local/state/wireplumber/default-profile; do
-    sed -i '/alsa_card.usb-MOTU_UltraLite/d' "$f" 2>/dev/null
+for d in /home/*; do
+    [ -d "$d" ] || continue
+    # Remove legacy user-local WirePlumber rule (older Makefile installed here, shadows the system rule)
+    rm -f "$d/.config/wireplumber/main.lua.d/51-motu-mk5.lua" 2>/dev/null || true
+    # Install WirePlumber drop-in to clear stale MOTU profile cache on every start
+    install -Dm644 /usr/share/motu-mk5/wireplumber-motu-mk5.conf \
+        "$d/.config/systemd/user/wireplumber.service.d/motu-mk5.conf" 2>/dev/null || true
+    # Clear stale MOTU profile cache
+    sed -i '/alsa_card.usb-MOTU_UltraLite/d' "$d/.local/state/wireplumber/default-profile" 2>/dev/null || true
+done
+
+# Restart audio stack for each logged-in user so new profiles take effect immediately
+loginctl list-users --no-legend 2>/dev/null | awk '{print $1}' | while read -r uid; do
+    [ -n "$uid" ] || continue
+    su_user=$(getent passwd "$uid" | cut -d: -f1)
+    [ -n "$su_user" ] || continue
+    su -l "$su_user" -c "XDG_RUNTIME_DIR=/run/user/$uid systemctl --user stop pipewire.socket pipewire-pulse.socket pipewire pipewire-pulse wireplumber" 2>/dev/null || true
+    pkill -u "$uid" -x pipewire 2>/dev/null || true
+    pkill -u "$uid" -x wireplumber 2>/dev/null || true
+    pkill -u "$uid" -x pipewire-pulse 2>/dev/null || true
+    sleep 1
+    su -l "$su_user" -c "XDG_RUNTIME_DIR=/run/user/$uid systemctl --user daemon-reload" 2>/dev/null || true
+    su -l "$su_user" -c "XDG_RUNTIME_DIR=/run/user/$uid systemctl --user enable motu-mk5d.service" 2>/dev/null || true
+    su -l "$su_user" -c "XDG_RUNTIME_DIR=/run/user/$uid systemctl --user enable --now motu-mk5-update.timer" 2>/dev/null || true
+    su -l "$su_user" -c "XDG_RUNTIME_DIR=/run/user/$uid systemctl --user start pipewire.socket pipewire-pulse.socket wireplumber" 2>/dev/null || true
 done
 
 echo ""
-echo "motu-mk5 installed. Replug the UltraLite mk5 or restart PipeWire:"
-echo "  systemctl --user restart pipewire pipewire-pulse wireplumber"
+echo "motu-mk5 installed. Audio stack restarted with new profiles."
+echo ""
+echo "Update checks run daily. To opt out:"
+echo "  echo 'enabled=false' > ~/.config/motu-mk5/update.conf"
+echo "  systemctl --user disable --now motu-mk5-update.timer"

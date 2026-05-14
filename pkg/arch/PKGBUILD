@@ -1,5 +1,5 @@
 pkgname=motu-mk5
-pkgver=0.1.1
+pkgver=0.2.0
 pkgrel=1
 pkgdesc="Native Linux integration for the MOTU UltraLite mk5"
 arch=('x86_64')
@@ -23,4 +23,5 @@ package() {
     install -Dm644 install/wireplumber/51-motu-mk5.lua "$pkgdir/usr/share/wireplumber/main.lua.d/51-motu-mk5.lua"
     install -Dm644 install/udev/89-motu-mk5.rules "$pkgdir/etc/udev/rules.d/89-motu-mk5.rules"
     install -Dm644 install/systemd/motu-mk5d.service "$pkgdir/usr/lib/systemd/user/motu-mk5d.service"
+    install -Dm644 install/systemd/wireplumber-motu-mk5.conf "$pkgdir/usr/share/motu-mk5/wireplumber-motu-mk5.conf"
 }
