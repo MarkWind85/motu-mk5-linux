@@ -1,21 +1,17 @@
 FROM fedora:40
 
 RUN dnf install -y rust cargo rpm-build rpmdevtools && dnf clean all
-
 RUN rpmdev-setuptree
 
-WORKDIR /build
+WORKDIR /src
 COPY . .
 
-RUN cargo build --release
+ARG VERSION
+RUN tar czf /root/rpmbuild/SOURCES/motu-mk5-${VERSION}.tar.gz \
+        --transform="s,^\.,motu-mk5-${VERSION}," \
+        --exclude='.git' --exclude='target' .
 
-RUN cp pkg/rpm/motu-mk5.spec /root/rpmbuild/SPECS/ && \
-    tar czf /root/rpmbuild/SOURCES/motu-mk5-$(grep '^version' Cargo.toml | head -1 | sed 's/.*= "//;s/"//').tar.gz \
-        --transform="s,^,motu-mk5-$(grep '^version' Cargo.toml | head -1 | sed 's/.*= "//;s/"//'),/" \
-        . && \
-    rpmbuild -bb --define "_topdir /root/rpmbuild" \
-        --define "__cargo_build :" \
-        --define "_builddir /build" \
-        /root/rpmbuild/SPECS/motu-mk5.spec
+RUN cp pkg/rpm/motu-mk5.spec /root/rpmbuild/SPECS/
+RUN rpmbuild -bb --define "debug_package %{nil}" /root/rpmbuild/SPECS/motu-mk5.spec
 
 RUN mkdir -p /out && cp /root/rpmbuild/RPMS/x86_64/motu-mk5-[0-9]*.rpm /out/

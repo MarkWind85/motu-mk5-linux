@@ -1,23 +1,24 @@
 FROM archlinux:base-devel
 
 RUN pacman -Syu --noconfirm rust && pacman -Scc --noconfirm
-
 RUN useradd -m builder && echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
 
-WORKDIR /build
+WORKDIR /src
 COPY . .
 
-RUN cargo build --release
+ARG VERSION
+RUN tar czf /tmp/motu-mk5-${VERSION}.tar.gz \
+        --transform="s,^\.,motu-mk5-linux-${VERSION}," \
+        --exclude='.git' --exclude='target' .
+
+RUN mkdir -p /home/builder/build && \
+    cp pkg/arch/PKGBUILD /home/builder/build/ && \
+    sed -i "s|^source=.*|source=(\"file:///tmp/motu-mk5-${VERSION}.tar.gz\")|" /home/builder/build/PKGBUILD && \
+    chown -R builder:builder /home/builder/build && \
+    chmod a+r /tmp/motu-mk5-${VERSION}.tar.gz
 
 USER builder
-WORKDIR /home/builder
-
-RUN mkdir -p pkg/src && \
-    cp /build/pkg/arch/PKGBUILD pkg/ && \
-    mkdir -p pkg/src/motu-mk5-linux-$(grep '^version' /build/Cargo.toml | head -1 | sed 's/.*= "//;s/"//') && \
-    cp -r /build/* pkg/src/motu-mk5-linux-$(grep '^version' /build/Cargo.toml | head -1 | sed 's/.*= "//;s/"//') 2>/dev/null || true
-
-WORKDIR /home/builder/pkg
+WORKDIR /home/builder/build
 RUN makepkg -sf --noconfirm --skipchecksums
 
-RUN mkdir -p /out && sudo cp *.pkg.tar.zst /out/
+RUN sudo mkdir -p /out && sudo cp *.pkg.tar.zst /out/
