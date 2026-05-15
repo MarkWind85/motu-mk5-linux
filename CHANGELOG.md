@@ -2,42 +2,39 @@
 
 ## 0.5.0
 
-### Diagnostics and issue registration
-
-- **`motu-ctl diagnose` command**: Generates a full diagnostic report (system info, PipeWire state, USB device, network interface, ALSA nodes, device connection, audio router, daemon status, recent logs) as markdown ready to paste into a GitHub issue. Includes the issue submission URL at the end of the report.
-- **Actionable error messages**: All user-facing errors now include what broke, likely cause, and what to do next. Persistent connection failures point to `motu-ctl diagnose`.
-- **GitHub issue templates**: Structured forms for bug reports, audio problems, connection issues, and feature requests. Audio and connection templates require diagnostic output. Blank issues disabled — users are guided through templates.
-- **README troubleshooting section**: Common issues, how to check logs, how to generate a diagnostic report, and how to file an issue.
-
-### Self-update
-
-- **`motu-ctl update` command**: Check for and install updates directly from GitHub releases. Detects the distro (Debian/Ubuntu, Fedora/RHEL, Arch) and downloads the correct package format (`.deb`, `.rpm`, `.pkg.tar.zst`). Installs via the native package manager (`dpkg`, `dnf`, `pacman`). Use `--check` to check for updates without installing.
-
-### Packaging
-
-- **Docker-based package builders**: Reproducible builds for all three distro families via Docker. Run `pkg/build-packages.sh` to build `.deb`, `.rpm`, and `.pkg.tar.zst` packages in one command. Supports building individual formats: `pkg/build-packages.sh deb|rpm|arch`.
-- **Updated RPM spec**: Version bump, phased post-install with per-user error reporting (matching the `.deb` postinst improvements from 0.4.0).
-- **Updated Arch PKGBUILD**: Version bump, synced file list.
-
-## 0.4.0
-
-### Installation error handling
-
-- **postinst phased execution**: Install script now reports per-user failures individually instead of silencing all errors. Critical config installs (WirePlumber, PipeWire pulse) report warnings on failure. Audio stack restart failures are reported per-user.
-- **Post-install validation**: After install, verifies that binaries are on PATH, ALSA profile exists, and udev rules are in place. Reports warnings for any missing components instead of always claiming success.
-- **Makefile preflight checks**: `make install` now checks for required tools (`pw-loopback`, `pw-cli`, `systemctl`) before building. Warns if optional tools (`pactl`, `pw-metadata`) are missing. Verifies PipeWire and WirePlumber restarted successfully after install.
-
-## 0.3.0
+Three releases worth of work shipped together: runtime resilience, installation reliability, and user-facing diagnostics. Updating from 0.2.1 to 0.5.0 gives you all of the below.
 
 ### Runtime error handling
 
-- **WebSocket disconnect detection**: The daemon now detects when the device disconnects and automatically reconnects. Previously, a dropped USB connection left the daemon running but silently doing nothing — device state changes were lost, and stale state was pushed back on restart.
-- **ALSA discovery retry**: Node discovery retries up to 10 times with exponential backoff (1s–16s) instead of exiting immediately. The daemon continues without audio routing if all attempts fail, so device control still works during PipeWire startup delays.
-- **Corrupted state recovery**: Corrupted state files are now logged, backed up to `device-state.json.corrupt`, and the daemon continues with default state instead of silently discarding saved settings.
-- **Atomic audio router start**: Loopback processes are now started atomically — if any channel fails to spawn, all already-started channels are cleaned up. No more partial audio routing with missing channels.
-- **Command error visibility**: `pw-metadata` and `pactl` failures are now logged with stderr output instead of being silently ignored.
-- **Signal handler logging**: Signal registration failures are logged instead of silently ignored.
-- **Systemd restart limits**: The service now stops restarting after 5 failures in 60 seconds instead of crash-looping indefinitely.
+- **WebSocket disconnect detection and reconnect**: The daemon now detects when the MOTU loses its USB connection and automatically reconnects when it comes back. Previously, a dropped connection left the daemon running but silently doing nothing — device state changes made on the hardware were lost, and on the next daemon restart, stale saved state was pushed back to the device, overwriting whatever the user had changed.
+- **ALSA discovery retry with backoff**: At startup, PipeWire node discovery now retries up to 10 times with exponential backoff (1s, 2s, 4s, ... up to 16s) instead of exiting immediately on failure. This handles the common boot race where the daemon starts before PipeWire finishes enumerating nodes. If all attempts fail, the daemon continues without audio routing — device control still works, and the user sees a clear error explaining what happened.
+- **Corrupted state file recovery**: If the JSON state file is corrupted (e.g., from a power loss during write), it's now logged at `warn!` level, backed up to `device-state.json.corrupt`, and the daemon starts with default state. Previously, corrupted files were silently discarded with no log entry — users lost all saved settings without knowing why.
+- **Atomic audio router start**: When spawning the 12 `pw-loopback` processes, they now start all-or-nothing. If any one fails, all already-started processes are killed and a clear error is reported. Previously, a failure partway through left some channels working and others missing, with no indication which or why.
+- **External command error visibility**: `pw-metadata` (sample rate enforcement) and `pactl` (ALSA sink volume) now capture stderr and log failures at `warn!` level. Previously, both commands discarded all output and ignored exit status — if either tool was missing or failed, the user had no way to know.
+- **Signal handler logging**: If SIGINT/SIGTERM handler registration fails (possible in containers or restricted environments), the failure is now logged instead of silently ignored.
+- **Systemd restart limits**: The service file now includes `StartLimitBurst=5` and `StartLimitIntervalSec=60`, so a crash-looping daemon stops after 5 failures in 60 seconds instead of restarting indefinitely. Users can then see the failure via `systemctl --user status motu-mk5d`.
+
+### Installation error handling
+
+- **Phased postinst script**: The Debian post-install script now runs in four phases — system setup, per-user config installation, audio stack restart, and post-install validation. Each phase handles errors independently: per-user failures are reported individually with the username, and the final summary reports whether the install was clean or had warnings. Previously, all 11 operations used `|| true` and the user always saw "installed successfully" regardless of what actually happened.
+- **Post-install validation**: After installation, the script verifies that `motu-mk5d` and `motu-ctl` are on PATH, the ALSA card profile exists, and udev rules are in place. Any missing component is reported as a warning.
+- **Makefile preflight checks**: `make install` now runs a `preflight` target first, checking for required tools (`pw-loopback`, `pw-cli`, `systemctl`) and warning about optional ones (`pactl`, `pw-metadata`). After the audio stack restart, it verifies that PipeWire and WirePlumber came back up.
+- **RPM spec updated**: The Fedora RPM `%post` scriptlet now has the same phased error handling as the Debian postinst — per-user failure reporting and individual error messages instead of blanket `|| true`.
+
+### Diagnostics and issue reporting
+
+- **`motu-ctl diagnose` command**: Generates a complete system diagnostic report covering: package version, kernel/distro/arch, USB device presence (MOTU vendor `07fd`), CDC Ethernet network interface, PipeWire version and MOTU node listing, WirePlumber device state, ALSA node discovery, WebSocket device connectivity, running `pw-loopback` process count, systemd daemon status, and the last 30 lines of daemon logs. Output is markdown, ready to paste directly into a GitHub issue. The report ends with the issue submission URL.
+- **Actionable error messages**: Every user-facing error now includes three parts: what broke, the likely cause, and what to do next. Connection failures tell the user to check USB and run `ip link`. Router failures mention checking `pw-loopback` installation. Persistent issues point to `motu-ctl diagnose`. No more bare "failed to X" messages.
+- **GitHub issue templates**: Four structured forms — general bug report, audio problems (with symptom checkboxes: no sound, crackling, wrong device, etc.), connection issues (device not found, drops, crash-loops), and feature requests. Audio and connection templates require diagnostic output. Blank issues are disabled — the template chooser links to the troubleshooting guide first.
+
+### Self-update
+
+- **`motu-ctl update` command**: Checks GitHub releases for the latest version, compares with the installed version, and offers to download and install the update. Detects the distro from `/etc/os-release` and downloads the correct package format — `.deb` for Debian/Ubuntu/Pop!_OS, `.rpm` for Fedora/RHEL, `.pkg.tar.zst` for Arch. Installs via the native package manager (`dpkg`, `dnf`, `pacman`). Use `--check` to check for updates without installing. The post-install scripts handle the audio stack restart.
+
+### Packaging and build infrastructure
+
+- **Docker-based package builders**: Reproducible builds for all three distro families. Each Dockerfile creates a source tarball and runs the standard packaging toolchain (`cargo-deb`, `rpmbuild`, `makepkg`) inside the correct base image. Run `pkg/build-packages.sh` to build all three, or `pkg/build-packages.sh deb|rpm|arch` for a single format. Output goes to `target/packages/`.
+- **`.dockerignore`**: Excludes `target/` and `.git/` from the Docker build context (was sending 1.3GB per build without this).
 
 ## 0.2.1
 

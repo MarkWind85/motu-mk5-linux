@@ -16,8 +16,10 @@ After install:
 - All physical I/O pairs appear as separate devices in GNOME Sound Settings
 - Output and input are independently selectable — pick any output with any input
 - Device is auto-detected on USB plug-in
+- Automatic reconnect if the device is unplugged and replugged
 - Survives reboots and system updates
 - Full device control via CLI (`motu-ctl`)
+- Built-in diagnostics and self-update
 
 ### Available I/O
 
@@ -58,7 +60,23 @@ Wine and Proton games work out of the box. Audio is automatically routed to the 
 
 ### Install
 
-See [Releases](https://github.com/MarkWind85/motu-mk5-linux/releases) for install packages and instructions.
+Download the package for your distro from [Releases](https://github.com/MarkWind85/motu-mk5-linux/releases/latest):
+
+| Distro | Command |
+|---|---|
+| Debian / Ubuntu / Pop!_OS | `sudo dpkg -i motu-mk5_0.5.0-1_amd64.deb` |
+| Fedora / RHEL | `sudo dnf install motu-mk5-0.5.0-1.fc40.x86_64.rpm` |
+| Arch Linux | `sudo pacman -U motu-mk5-0.5.0-1-x86_64.pkg.tar.zst` |
+
+The installer configures everything automatically — ALSA profile, WirePlumber rules, udev detection, systemd service, and Wine/Proton routing. Audio stack is restarted during install (brief interruption).
+
+### Update
+
+```bash
+motu-ctl update
+```
+
+Checks GitHub for the latest release, detects your distro, downloads the correct package, and installs it. Use `--check` to check without installing.
 
 ### CLI tool
 
@@ -191,13 +209,20 @@ Send/Receive: [prop_id:u16] [index:u16] [data]
 ### Building from source
 
 ```bash
-# Requires: Rust toolchain, libpipewire-0.3-dev
+# Build binaries (requires Rust toolchain)
 cargo build --release
 
-# Build .deb package
-cargo install cargo-deb
-cargo deb
+# Install from source
+make install
+
+# Build distribution packages via Docker
+pkg/build-packages.sh          # all three: .deb, .rpm, .pkg.tar.zst
+pkg/build-packages.sh deb      # just Debian
+pkg/build-packages.sh rpm      # just Fedora
+pkg/build-packages.sh arch     # just Arch
 ```
+
+Packages are output to `target/packages/`. The Docker builders create source tarballs and run each distro's native packaging toolchain (`cargo-deb`, `rpmbuild`, `makepkg`) in isolated containers — no cross-distro dependencies needed on the host.
 
 ### Project structure
 
@@ -224,6 +249,14 @@ install/
   wireplumber/        — WirePlumber device configuration
   udev/               — Device detection rules
   systemd/            — User service definition
+pkg/
+  docker/             — Dockerfiles for Debian, Fedora, Arch builds
+  rpm/                — RPM spec file
+  arch/               — Arch PKGBUILD
+  build-packages.sh   — One-command builder for all distros
+debian/
+  postinst            — Debian post-install (phased error handling)
+  postrm              — Debian post-remove cleanup
 ```
 
 ## License
