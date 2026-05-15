@@ -83,6 +83,12 @@ motu-ctl dump
 
 # Generate a diagnostic report for troubleshooting
 motu-ctl diagnose
+
+# Check for updates
+motu-ctl update --check
+
+# Update to latest release
+motu-ctl update
 ```
 
 ### Troubleshooting
@@ -208,6 +214,7 @@ src/
     connection.rs   — UDP discovery + WebSocket transport
     state.rs        — Device state manager (sync, persist, restore)
   diagnostics.rs    — System diagnostic report generation
+  updater.rs        — Self-update from GitHub releases
   daemon.rs         — motu-mk5d entry point
   ctl.rs            — motu-ctl entry point
   lib.rs

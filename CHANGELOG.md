@@ -8,6 +8,7 @@
 - **Actionable error messages**: All user-facing errors now include what broke, likely cause, and what to do next. Persistent connection failures point to `motu-ctl diagnose`.
 - **GitHub issue templates**: Structured forms for bug reports, audio problems, connection issues, and feature requests. Audio and connection templates require diagnostic output.
 - **README troubleshooting section**: Common issues, how to check logs, how to generate a diagnostic report, and how to file an issue.
+- **`motu-ctl update` command**: Check for and install updates from GitHub releases. Downloads the latest `.deb` package and installs via `dpkg`. Use `--check` to check without installing.
 
 ## 0.4.0
 

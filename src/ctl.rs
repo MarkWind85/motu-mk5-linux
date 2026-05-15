@@ -41,6 +41,12 @@ enum Commands {
     Probe,
     /// Generate a diagnostic report for troubleshooting
     Diagnose,
+    /// Check for and install updates from GitHub releases
+    Update {
+        /// Only check for updates, don't install
+        #[arg(long)]
+        check: bool,
+    },
 }
 
 fn main() -> Result<()> {
@@ -127,6 +133,13 @@ fn main() -> Result<()> {
         Commands::Diagnose => {
             let report = motu_mk5::diagnostics::generate_report();
             println!("{report}");
+        }
+        Commands::Update { check } => {
+            if check {
+                motu_mk5::updater::check()?;
+            } else {
+                motu_mk5::updater::update()?;
+            }
         }
     }
 
