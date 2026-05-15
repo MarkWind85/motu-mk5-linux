@@ -201,6 +201,7 @@ pub fn generate_report() -> String {
         section_audio_router(),
         section_daemon(),
         section_logs(),
+        "---\n\nTo report an issue, copy this output and paste it into a new issue at:\nhttps://github.com/MarkWind85/motu-mk5-linux/issues/new/choose".to_string(),
     ];
 
     sections.join("\n\n")
