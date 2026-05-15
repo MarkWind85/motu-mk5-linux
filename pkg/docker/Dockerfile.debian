@@ -1,0 +1,11 @@
+FROM rust:1-bookworm
+
+RUN cargo install cargo-deb
+
+WORKDIR /build
+COPY . .
+
+RUN cargo build --release
+RUN cargo deb --no-build
+
+RUN mkdir -p /out && cp target/debian/*.deb /out/

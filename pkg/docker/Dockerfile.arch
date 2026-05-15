@@ -1,0 +1,23 @@
+FROM archlinux:base-devel
+
+RUN pacman -Syu --noconfirm rust && pacman -Scc --noconfirm
+
+RUN useradd -m builder && echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+
+WORKDIR /build
+COPY . .
+
+RUN cargo build --release
+
+USER builder
+WORKDIR /home/builder
+
+RUN mkdir -p pkg/src && \
+    cp /build/pkg/arch/PKGBUILD pkg/ && \
+    mkdir -p pkg/src/motu-mk5-linux-$(grep '^version' /build/Cargo.toml | head -1 | sed 's/.*= "//;s/"//') && \
+    cp -r /build/* pkg/src/motu-mk5-linux-$(grep '^version' /build/Cargo.toml | head -1 | sed 's/.*= "//;s/"//') 2>/dev/null || true
+
+WORKDIR /home/builder/pkg
+RUN makepkg -sf --noconfirm --skipchecksums
+
+RUN mkdir -p /out && sudo cp *.pkg.tar.zst /out/

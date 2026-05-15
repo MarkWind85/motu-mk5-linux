@@ -5,10 +5,66 @@ use anyhow::{bail, Context, Result};
 const REPO: &str = "MarkWind85/motu-mk5-linux";
 const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
+enum Distro {
+    Debian,
+    Fedora,
+    Arch,
+}
+
+impl Distro {
+    fn detect() -> Result<Self> {
+        let os_release = std::fs::read_to_string("/etc/os-release")
+            .context("cannot read /etc/os-release")?;
+
+        let id_line = os_release
+            .lines()
+            .find(|l| l.starts_with("ID=") || l.starts_with("ID_LIKE="))
+            .unwrap_or("");
+
+        let id = id_line
+            .split_once('=')
+            .map(|(_, v)| v.trim_matches('"').to_lowercase())
+            .unwrap_or_default();
+
+        if id.contains("arch") || id.contains("manjaro") || id.contains("endeavouros") {
+            Ok(Distro::Arch)
+        } else if id.contains("fedora") || id.contains("rhel") || id.contains("centos") || id.contains("opensuse") {
+            Ok(Distro::Fedora)
+        } else {
+            // Debian, Ubuntu, Pop!_OS, Mint, etc — default
+            Ok(Distro::Debian)
+        }
+    }
+
+    fn package_suffix(&self) -> &str {
+        match self {
+            Distro::Debian => ".deb",
+            Distro::Fedora => ".rpm",
+            Distro::Arch => ".pkg.tar.zst",
+        }
+    }
+
+    fn install_cmd(&self, path: &str) -> Vec<String> {
+        match self {
+            Distro::Debian => vec!["sudo".into(), "dpkg".into(), "-i".into(), path.into()],
+            Distro::Fedora => vec!["sudo".into(), "dnf".into(), "install".into(), "-y".into(), path.into()],
+            Distro::Arch => vec!["sudo".into(), "pacman".into(), "-U".into(), "--noconfirm".into(), path.into()],
+        }
+    }
+
+    fn name(&self) -> &str {
+        match self {
+            Distro::Debian => "Debian/Ubuntu",
+            Distro::Fedora => "Fedora/RHEL",
+            Distro::Arch => "Arch Linux",
+        }
+    }
+}
+
 struct Release {
     version: String,
-    deb_url: Option<String>,
-    deb_name: Option<String>,
+    pkg_url: Option<String>,
+    pkg_name: Option<String>,
 }
 
 fn parse_version(s: &str) -> (u32, u32, u32) {
@@ -25,18 +81,13 @@ fn is_newer(latest: &str, current: &str) -> bool {
     parse_version(latest) > parse_version(current)
 }
 
-fn detect_arch() -> Result<String> {
-    let output = Command::new("uname").arg("-m").output()
-        .context("failed to detect architecture")?;
-    let arch = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    match arch.as_str() {
-        "x86_64" => Ok("amd64".into()),
-        "aarch64" => Ok("arm64".into()),
-        other => Ok(other.into()),
-    }
+fn detect_arch() -> String {
+    Command::new("uname").arg("-m").output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .unwrap_or_else(|_| "x86_64".into())
 }
 
-fn fetch_latest_release() -> Result<Release> {
+fn fetch_latest_release(distro: &Distro) -> Result<Release> {
     let url = format!("https://api.github.com/repos/{REPO}/releases/latest");
     let output = Command::new("curl")
         .args([
@@ -65,27 +116,27 @@ fn fetch_latest_release() -> Result<Release> {
         .context("no tag_name in release")?;
     let version = tag.strip_prefix('v').unwrap_or(tag).to_string();
 
-    let arch = detect_arch().unwrap_or_else(|_| "amd64".into());
-    let deb_pattern = format!("_{arch}.deb");
+    let arch = detect_arch();
+    let suffix = distro.package_suffix();
 
-    let mut deb_url = None;
-    let mut deb_name = None;
+    let mut pkg_url = None;
+    let mut pkg_name = None;
 
     if let Some(assets) = json["assets"].as_array() {
         for asset in assets {
             let name = asset["name"].as_str().unwrap_or("");
-            if name.ends_with(&deb_pattern) {
-                deb_url = asset["browser_download_url"].as_str().map(String::from);
-                deb_name = Some(name.to_string());
+            if name.ends_with(suffix) && name.contains(&arch) {
+                pkg_url = asset["browser_download_url"].as_str().map(String::from);
+                pkg_name = Some(name.to_string());
                 break;
             }
         }
     }
 
-    Ok(Release { version, deb_url, deb_name })
+    Ok(Release { version, pkg_url, pkg_name })
 }
 
-fn download_deb(url: &str, dest: &str) -> Result<()> {
+fn download(url: &str, dest: &str) -> Result<()> {
     println!("Downloading {}...", dest.rsplit('/').next().unwrap_or(dest));
     let status = Command::new("curl")
         .args(["-sL", "-o", dest, url])
@@ -98,33 +149,36 @@ fn download_deb(url: &str, dest: &str) -> Result<()> {
     Ok(())
 }
 
-fn install_deb(path: &str) -> Result<()> {
+fn install_package(distro: &Distro, path: &str) -> Result<()> {
     println!("Installing (sudo required)...");
-    let status = Command::new("sudo")
-        .args(["dpkg", "-i", path])
+    let args = distro.install_cmd(path);
+    let status = Command::new(&args[0])
+        .args(&args[1..])
         .status()
-        .context("failed to run dpkg")?;
+        .with_context(|| format!("failed to run {}", args[0]))?;
 
     if !status.success() {
-        bail!("dpkg install failed — check output above");
+        bail!("package install failed — check output above");
     }
     Ok(())
 }
 
 pub fn check() -> Result<()> {
+    let distro = Distro::detect()?;
     println!("Current version: {CURRENT_VERSION}");
+    println!("Detected distro: {}", distro.name());
     print!("Checking for updates... ");
     std::io::Write::flush(&mut std::io::stdout()).ok();
 
-    let release = fetch_latest_release()?;
+    let release = fetch_latest_release(&distro)?;
     println!("latest release: {}", release.version);
 
     if is_newer(&release.version, CURRENT_VERSION) {
         println!("\nUpdate available: {CURRENT_VERSION} → {}", release.version);
-        if release.deb_url.is_some() {
+        if release.pkg_url.is_some() {
             println!("Run 'motu-ctl update' to install.");
         } else {
-            println!("No .deb package found for your architecture.");
+            println!("No {} package found for your architecture.", distro.package_suffix());
             println!("Download manually: https://github.com/{REPO}/releases/latest");
         }
     } else {
@@ -135,11 +189,13 @@ pub fn check() -> Result<()> {
 }
 
 pub fn update() -> Result<()> {
+    let distro = Distro::detect()?;
     println!("Current version: {CURRENT_VERSION}");
+    println!("Detected distro: {}", distro.name());
     print!("Checking for updates... ");
     std::io::Write::flush(&mut std::io::stdout()).ok();
 
-    let release = fetch_latest_release()?;
+    let release = fetch_latest_release(&distro)?;
     println!("latest release: {}", release.version);
 
     if !is_newer(&release.version, CURRENT_VERSION) {
@@ -147,19 +203,20 @@ pub fn update() -> Result<()> {
         return Ok(());
     }
 
-    let deb_url = match &release.deb_url {
+    let pkg_url = match &release.pkg_url {
         Some(url) => url,
         None => {
-            println!("\nNo .deb package found for your architecture.");
+            println!("\nNo {} package found for your architecture.", distro.package_suffix());
             println!("Download manually: https://github.com/{REPO}/releases/latest");
             return Ok(());
         }
     };
 
-    let deb_name = release.deb_name.as_deref().unwrap_or("motu-mk5.deb");
-    let dest = format!("/tmp/{deb_name}");
+    let pkg_name = release.pkg_name.as_deref().unwrap_or("motu-mk5-update");
+    let dest = format!("/tmp/{pkg_name}");
 
     println!("\nUpdate available: {CURRENT_VERSION} → {}", release.version);
+    println!("Package: {pkg_name}");
     println!("This will briefly interrupt audio.\n");
 
     print!("Install? [y/N] ");
@@ -175,8 +232,8 @@ pub fn update() -> Result<()> {
     }
 
     println!();
-    download_deb(deb_url, &dest)?;
-    install_deb(&dest)?;
+    download(pkg_url, &dest)?;
+    install_package(&distro, &dest)?;
 
     std::fs::remove_file(&dest).ok();
 

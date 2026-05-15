@@ -4,11 +4,20 @@
 
 ### Diagnostics and issue registration
 
-- **`motu-ctl diagnose` command**: Generates a full diagnostic report (system info, PipeWire state, USB device, network interface, ALSA nodes, device connection, audio router, daemon status, recent logs) as markdown ready to paste into a GitHub issue.
+- **`motu-ctl diagnose` command**: Generates a full diagnostic report (system info, PipeWire state, USB device, network interface, ALSA nodes, device connection, audio router, daemon status, recent logs) as markdown ready to paste into a GitHub issue. Includes the issue submission URL at the end of the report.
 - **Actionable error messages**: All user-facing errors now include what broke, likely cause, and what to do next. Persistent connection failures point to `motu-ctl diagnose`.
-- **GitHub issue templates**: Structured forms for bug reports, audio problems, connection issues, and feature requests. Audio and connection templates require diagnostic output.
+- **GitHub issue templates**: Structured forms for bug reports, audio problems, connection issues, and feature requests. Audio and connection templates require diagnostic output. Blank issues disabled — users are guided through templates.
 - **README troubleshooting section**: Common issues, how to check logs, how to generate a diagnostic report, and how to file an issue.
-- **`motu-ctl update` command**: Check for and install updates from GitHub releases. Downloads the latest `.deb` package and installs via `dpkg`. Use `--check` to check without installing.
+
+### Self-update
+
+- **`motu-ctl update` command**: Check for and install updates directly from GitHub releases. Detects the distro (Debian/Ubuntu, Fedora/RHEL, Arch) and downloads the correct package format (`.deb`, `.rpm`, `.pkg.tar.zst`). Installs via the native package manager (`dpkg`, `dnf`, `pacman`). Use `--check` to check for updates without installing.
+
+### Packaging
+
+- **Docker-based package builders**: Reproducible builds for all three distro families via Docker. Run `pkg/build-packages.sh` to build `.deb`, `.rpm`, and `.pkg.tar.zst` packages in one command. Supports building individual formats: `pkg/build-packages.sh deb|rpm|arch`.
+- **Updated RPM spec**: Version bump, phased post-install with per-user error reporting (matching the `.deb` postinst improvements from 0.4.0).
+- **Updated Arch PKGBUILD**: Version bump, synced file list.
 
 ## 0.4.0
 

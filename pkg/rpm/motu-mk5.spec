@@ -1,5 +1,5 @@
 Name:           motu-mk5
-Version:        0.2.1
+Version:        0.5.0
 Release:        1%{?dist}
 Summary:        Native Linux integration for the MOTU UltraLite mk5
 License:        GPL-2.0-or-later
@@ -35,14 +35,25 @@ install -Dm644 install/pipewire-pulse/50-motu-wine-routing.conf %{buildroot}%{_d
 %post
 udevadm control --reload-rules 2>/dev/null || true
 udevadm trigger --subsystem-match=sound 2>/dev/null || true
+
+install_errors=0
 for d in /home/*; do
     [ -d "$d" ] || continue
-    install -Dm644 %{_datadir}/motu-mk5/wireplumber-motu-mk5.conf \
-        "$d/.config/systemd/user/wireplumber.service.d/motu-mk5.conf" 2>/dev/null || true
-    install -Dm644 %{_datadir}/motu-mk5/50-motu-wine-routing.conf \
-        "$d/.config/pipewire/pipewire-pulse.conf.d/50-motu-wine-routing.conf" 2>/dev/null || true
+    user=$(basename "$d")
+    rm -f "$d/.config/wireplumber/main.lua.d/51-motu-mk5.lua" 2>/dev/null || true
+    if ! install -Dm644 %{_datadir}/motu-mk5/wireplumber-motu-mk5.conf \
+        "$d/.config/systemd/user/wireplumber.service.d/motu-mk5.conf" 2>/dev/null; then
+        echo "WARNING: failed to install WirePlumber config for $user" >&2
+        install_errors=$((install_errors + 1))
+    fi
+    if ! install -Dm644 %{_datadir}/motu-mk5/50-motu-wine-routing.conf \
+        "$d/.config/pipewire/pipewire-pulse.conf.d/50-motu-wine-routing.conf" 2>/dev/null; then
+        echo "WARNING: failed to install Wine routing config for $user" >&2
+        install_errors=$((install_errors + 1))
+    fi
     sed -i '/alsa_card.usb-MOTU_UltraLite/d' "$d/.local/state/wireplumber/default-profile" 2>/dev/null || true
 done
+
 loginctl list-users --no-legend 2>/dev/null | awk '{print $1}' | while read -r uid; do
     [ -n "$uid" ] || continue
     su_user=$(getent passwd "$uid" | cut -d: -f1)
@@ -53,8 +64,17 @@ loginctl list-users --no-legend 2>/dev/null | awk '{print $1}' | while read -r u
     pkill -u "$uid" -x pipewire-pulse 2>/dev/null || true
     sleep 1
     su -l "$su_user" -c "XDG_RUNTIME_DIR=/run/user/$uid systemctl --user daemon-reload" 2>/dev/null || true
-    su -l "$su_user" -c "XDG_RUNTIME_DIR=/run/user/$uid systemctl --user start pipewire.socket pipewire-pulse.socket wireplumber" 2>/dev/null || true
+    su -l "$su_user" -c "XDG_RUNTIME_DIR=/run/user/$uid systemctl --user enable motu-mk5d.service" 2>/dev/null || true
+    if su -l "$su_user" -c "XDG_RUNTIME_DIR=/run/user/$uid systemctl --user start pipewire.socket pipewire-pulse.socket wireplumber" 2>/dev/null; then
+        :
+    else
+        echo "WARNING: failed to restart audio stack for $su_user" >&2
+    fi
 done
+
+if [ $install_errors -gt 0 ]; then
+    echo "WARNING: $install_errors user config(s) failed to install" >&2
+fi
 
 %postun
 udevadm control --reload-rules 2>/dev/null || true
