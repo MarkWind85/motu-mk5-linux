@@ -2,26 +2,22 @@
 
 ## 0.2.0
 
-### Independent I/O profile selection
+### Independent I/O selection
 
-Replaces the single-profile-at-a-time model with a unified `all-io` profile that exposes all physical I/O pairs as independent PipeWire nodes. Output and input devices can now be selected independently in GNOME Settings (or any PulseAudio/PipeWire-aware app) — no more combined "Main 1/2 + Mic/Line 1/2" profiles or losing input when switching output.
+Output and input devices are now independently selectable in GNOME Settings. The daemon creates 7 virtual output devices and 5 virtual input devices, each routed to the correct physical I/O pair on the MOTU.
 
-**Outputs** (selectable independently):
-- Main 1/2, Line 3/4, Line 5/6, Line 7/8, Line 9/10, Phones, S/PDIF Out
+### WebSocket device control
 
-**Inputs** (selectable independently):
-- Mic/Line 1/2, Line In 3/4, Line In 5/6, Line In 7/8, S/PDIF In
+Replaced MIDI SysEx transport with WebSocket over the MOTU's USB network interface. UDP multicast discovery finds the device automatically. Full device state sync (2400+ properties) on connect. Compatible with CueMix5 running simultaneously.
 
-### Reliable updates
+### Audio router
 
-- Install and upgrade now fully restart the audio stack (including socket teardown) so new profiles take effect immediately — no reboot or manual restart required
-- WirePlumber systemd drop-in clears stale MOTU profile cache on every WirePlumber start, preventing the device from getting stuck on "off"
-- Applies to all install paths: deb, RPM, Arch, and Makefile
+The daemon spawns and manages `pw-loopback` instances for each I/O pair using the pro-audio ALSA profile. Enforces sample rate via PipeWire metadata. Auto-restarts on failure. Router operates independently of device control — audio works even if the WebSocket connection fails.
 
-### Other changes
+### Dependencies
 
-- WirePlumber rules now assign distinct names and priorities to each I/O node
-- Uninstall (deb, RPM) cleans up the WirePlumber drop-in and systemd overrides
+- Added: `tungstenite` (WebSocket), `socket2` (UDP discovery)
+- Replaced: `midir` (MIDI) with WebSocket transport
 
 ## 0.1.1
 

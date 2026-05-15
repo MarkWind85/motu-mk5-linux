@@ -2,7 +2,7 @@
 
 Native Linux integration for the MOTU UltraLite mk5 audio interface.
 
-**Status: Work in Progress** — Audio I/O and system integration are working. For mixer, EQ, and routing control, use [CueMix5 for Linux](https://github.com/MarkWind85/com.motu.CueMix5-1.0.0).
+For mixer, EQ, and routing control, use [CueMix5 for Linux](https://github.com/MarkWind85/com.motu.CueMix5-1.0.0).
 
 ---
 
@@ -13,11 +13,35 @@ Native Linux integration for the MOTU UltraLite mk5 audio interface.
 Makes the MOTU UltraLite mk5 work natively on Linux. No manual configuration, no workarounds.
 
 After install:
-- All physical I/O pairs appear as selectable profiles in GNOME Sound Settings
-- Speaker test buttons work (Front Left / Front Right)
-- Direct audio path to hardware — no loopback layers, no resampling
+- All physical I/O pairs appear as separate devices in GNOME Sound Settings
+- Output and input are independently selectable — pick any output with any input
 - Device is auto-detected on USB plug-in
 - Survives reboots and system updates
+- Full device control via CLI (`motu-ctl`)
+
+### Available I/O
+
+Select these in GNOME Sound Settings under Output Device / Input Device:
+
+**Outputs**
+| Device | Physical output |
+|---|---|
+| MOTU Main 1/2 | Main output pair (back panel) |
+| MOTU Line 3/4 | Analog line out 3-4 |
+| MOTU Line 5/6 | Analog line out 5-6 |
+| MOTU Line 7/8 | Analog line out 7-8 |
+| MOTU Line 9/10 | Analog line out 9-10 |
+| MOTU Phones | Headphone jack |
+| MOTU S/PDIF Out | S/PDIF digital output |
+
+**Inputs**
+| Device | Physical input |
+|---|---|
+| MOTU Mic/Line 1/2 | Combo jacks (mic or line level) |
+| MOTU Line In 3/4 | Analog line in 3-4 |
+| MOTU Line In 5/6 | Analog line in 5-6 |
+| MOTU Line In 7/8 | Analog line in 7-8 |
+| MOTU S/PDIF In | S/PDIF digital input |
 
 ### Requirements
 
@@ -28,49 +52,27 @@ After install:
 
 See [Releases](https://github.com/MarkWind85/motu-mk5-linux/releases) for install packages and instructions.
 
-### Available profiles
-
-Select these in GNOME Sound Settings under Configuration:
-
-**Output**
-| Profile | Physical output |
-|---|---|
-| Main 1/2 | Main output pair (back panel) |
-| Line Out 3/4 | Analog line out 3-4 |
-| Line Out 5/6 | Analog line out 5-6 |
-| Line Out 7/8 | Analog line out 7-8 |
-| Line Out 9/10 | Analog line out 9-10 |
-| Phones | Headphone jack |
-| S/PDIF Out | S/PDIF digital output |
-| All Outputs | All 22 channels (for DAW use) |
-
-**Input**
-| Profile | Physical input |
-|---|---|
-| Mic/Line 1/2 | Combo jacks (mic or line level) |
-| Line In 3/4 | Analog line in 3-4 |
-| Line In 5/6 | Analog line in 5-6 |
-| Line In 7/8 | Analog line in 7-8 |
-| S/PDIF In | S/PDIF digital input |
-| All Inputs | All 20 channels (for DAW use) |
-
-Output and input profiles are independent — pick any output with any input.
-
-### MIDI
-
-MIDI support is coming.
-
 ### CLI tool
 
 ```bash
+# Show device status (model, sample rate, gains, clock)
+motu-ctl status
+
+# Get a property
+motu-ctl get sample_rate
+
+# Set a property
+motu-ctl set input_gain --index 0 40
+
 # List all device properties
 motu-ctl list
 
 # Probe and identify connected device
 motu-ctl probe
-```
 
-> Note: `motu-ctl` device control (gain, EQ, mixer, routing) requires the control plane which is under development. The CLI currently builds and connects but the mk5's MIDI SysEx response path needs further investigation.
+# Dump full device state as JSON
+motu-ctl dump
+```
 
 ---
 
@@ -78,58 +80,52 @@ motu-ctl probe
 
 ### Architecture
 
-The mk5 has two planes on USB:
+The daemon (`motu-mk5d`) manages two independent subsystems:
 
-1. **Audio streaming** — USB Audio Class 2.0, handled by the Linux kernel's `snd-usb-audio` driver. Works out of the box. 22 output / 20 input channels at 48kHz.
+1. **Audio router** — Spawns `pw-loopback` instances to create virtual stereo devices for each physical I/O pair. Uses the pro-audio ALSA profile (single device open, all channels) with per-pair channel routing. Independent of device control — audio works even if the control connection fails.
 
-2. **Control plane** — Mixer, EQ, compressor, gate, reverb, routing, preamp gain, 48V phantom power. This is what CueMix5 provides on macOS/Windows. On Linux, it's what this project implements.
+2. **Device control** — Connects to the MOTU over WebSocket (`ws://device:1280`) via its USB network interface. UDP multicast discovery finds the device automatically. Full bidirectional property sync — reads device state on connect, persists to disk, restores on reconnect.
 
 ### What the package installs
 
 | File | Path | Purpose |
 |---|---|---|
-| `motu-ultralite-mk5.conf` | `/usr/share/alsa-card-profile/mixer/profile-sets/` | ALSA Card Profile — maps physical I/O pairs to stereo FL/FR channels |
-| `51-motu-mk5.lua` | `/usr/share/wireplumber/main.lua.d/` | WirePlumber rules — device naming, priority, profile set reference |
-| `89-motu-mk5.rules` | `/etc/udev/rules.d/` | udev — device detection, ACP profile set assignment, daemon trigger |
-| `motu-mk5d.service` | `/usr/lib/systemd/user/` | systemd user service for the control daemon |
-| `motu-mk5d` | `/usr/bin/` | Control daemon — connects via MIDI SysEx, syncs/persists device state |
+| `motu-ultralite-mk5.conf` | `/usr/share/alsa-card-profile/mixer/profile-sets/` | ALSA Card Profile — channel mapping definitions |
+| `51-motu-mk5.lua` | WirePlumber config dir | Sets pro-audio profile on the MOTU device |
+| `89-motu-mk5.rules` | `/etc/udev/rules.d/` | udev — device detection, profile set assignment |
+| `motu-mk5d.service` | systemd user service dir | Control daemon auto-start |
+| `motu-mk5d` | `/usr/bin/` | Daemon — audio router + WebSocket device control |
 | `motu-ctl` | `/usr/bin/` | CLI tool — read/write any device parameter |
 
 ### Control protocol
 
-The mk5's control protocol was extracted from the CueMix5 Electron app source (`/opt/com.motu.CueMix5-1.0.0/resources/app.asar`). Key source files:
+The mk5 exposes a USB CDC Ethernet interface with a WebSocket server on port 1280.
 
-- `datastore.js` — Binary property protocol (encode/decode, send/receive)
-- `midi.js` — MIDI SysEx transport layer, 7-bit encoding
-- `dev.js` — UltraLite mk5 property definitions (all IDs, types, value ranges)
-- `dev_common.js` — Shared constants and types
+**Discovery:** The device broadcasts JSON on UDP multicast port 1280:
+```json
+{"uid":"ULM5FFE434","name":"UltraLite-mk5","ip":"169.254.53.228","model":"UltraLite-mk5","version":"2.0.8+2568","interval":1}
+```
 
-**Transport:** MIDI SysEx over USB MIDI interface (interface 4)
-- MOTU manufacturer ID: `00 00 3B`
-- Protocol ID: `00 01`
-- Request types: `SetProperty(0)`, `ProtocolProbe(1)`, `EnableSysexAPI(2)`
+**Transport:** WebSocket binary frames at `ws://device-ip:1280`
 
 **Binary property format:**
-
 ```
-Host → Device: [prop_id:u16] [index:u16] [length:u16] [data]
-Device → Host: [prop_id:u16] [index:u16] [data]
+Send/Receive: [prop_id:u16] [index:u16] [data]
 ```
 
+- All multi-byte values are big-endian
 - Floats use 8.24 fixed-point encoding (`value * 0x01000000`)
 - Strings are 32-byte null-terminated
-- All multi-byte values are big-endian
 
 **Connection flow:**
-1. Send `ProtocolProbe` SysEx
-2. Device responds confirming MOTU protocol
-3. Send `EnableSysexAPI`
-4. Device streams all current property values
-5. Send `SetProperty` to change any parameter
+1. Listen for UDP discovery broadcast on port 1280
+2. Connect WebSocket to device IP
+3. Device immediately streams all current property values
+4. Send binary property frames to change parameters
 
 ### Property map
 
-60+ properties covering the full device feature set. Run `motu-ctl list` or see `src/protocol/properties.rs` for the complete map. Major categories:
+95+ properties covering the full device feature set. Run `motu-ctl list` or see `src/protocol/properties.rs` for the complete map. Major categories:
 
 | Category | Property IDs | Description |
 |---|---|---|
@@ -146,22 +142,12 @@ Device → Host: [prop_id:u16] [index:u16] [data]
 | Compressor | 1011–1015, 1021 | Threshold, attack, release, ratio, makeup |
 | Reverb | 1030–1034 | Decay, damping, pre-delay, width, preset |
 | Talkback | 5026–5031 | Enable, level, dim, source, destination |
-| Meters | 6000 | All level meters |
-
-### Open questions
-
-- **MIDI SysEx**: The probe message is sent and received by the device (ALSA shows Tx bytes incrementing) but no response comes back. Either the mk5 firmware requires activation, or the SysEx property protocol isn't available on this model over MIDI. CueMix5's WebMIDI code path suggests it should work.
-
-- **CDC Ethernet**: The mk5 exposes a USB CDC Ethernet interface (`enx*`) that responds to ping at a link-local address, but no TCP ports are open. The MOTU AVB HTTP API (documented by MOTU at port 80/1280) isn't served over this link.
-
-- **USB vendor interface**: Interface 7 has an interrupt IN endpoint only (no OUT). May carry meter data. The Drumfix `motu-avb-usb` project has partial documentation of the vendor USB protocol in `protocol.h`.
 
 ### Building from source
 
 ```bash
-# Requires: Rust toolchain, libasound2-dev
+# Requires: Rust toolchain, libpipewire-0.3-dev
 cargo build --release
-cargo test
 
 # Build .deb package
 cargo install cargo-deb
@@ -172,19 +158,21 @@ cargo deb
 
 ```
 src/
+  audio/
+    router.rs       — pw-loopback management (spawn, stop, rate enforcement)
   protocol/
-    sysex.rs        — MIDI SysEx framing (encode/decode/build/parse)
-    properties.rs   — Full property map (60+ properties)
+    sysex.rs        — MIDI SysEx framing (legacy, kept for reference)
+    properties.rs   — Full property map (95+ properties)
     types.rs        — Property types and 8.24 fixed-point conversion
   device/
-    connection.rs   — MIDI port discovery and I/O
+    connection.rs   — UDP discovery + WebSocket transport
     state.rs        — Device state manager (sync, persist, restore)
   daemon.rs         — motu-mk5d entry point
   ctl.rs            — motu-ctl entry point
   lib.rs
 install/
   alsa-card-profile/  — ACP profile for channel mapping
-  wireplumber/        — WirePlumber node configuration
+  wireplumber/        — WirePlumber device configuration
   udev/               — Device detection rules
   systemd/            — User service definition
 ```

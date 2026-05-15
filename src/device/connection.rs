@@ -1,125 +1,129 @@
-use std::sync::mpsc;
+use std::net::UdpSocket;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
-use log::{info, warn, debug};
-use midir::{MidiInput, MidiOutput, MidiInputConnection, MidiOutputConnection};
+use log::{info, debug};
+use tungstenite::{connect, Message};
+use tungstenite::stream::MaybeTlsStream;
 
-use crate::protocol::sysex;
+const DISCOVERY_PORT: u16 = 1280;
+const DISCOVERY_TIMEOUT: Duration = Duration::from_secs(5);
+const WS_READ_TIMEOUT: Duration = Duration::from_millis(100);
 
-const MOTU_PORT_SUBSTR: &str = "UltraLite-mk5";
-const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
-
-pub struct MidiConnection {
-    _input: MidiInputConnection<()>,
-    output: MidiOutputConnection,
-    rx: mpsc::Receiver<Vec<u8>>,
+pub struct DeviceConnection {
+    ws: tungstenite::WebSocket<MaybeTlsStream<std::net::TcpStream>>,
+    pub device_ip: String,
 }
 
-impl MidiConnection {
+impl DeviceConnection {
     pub fn open() -> Result<Self> {
-        let (tx, rx) = mpsc::channel();
+        let ip = discover_device()?;
+        info!("discovered MOTU at {ip}");
 
-        let midi_out = MidiOutput::new("motu-mk5-out")
-            .context("failed to create MIDI output")?;
-        let midi_in = MidiInput::new("motu-mk5-in")
-            .context("failed to create MIDI input")?;
+        let url = format!("ws://{}:{}", ip, DISCOVERY_PORT);
+        let (mut ws, _response) = connect(&url)
+            .with_context(|| format!("failed to connect to {url}"))?;
 
-        let out_port = find_port(&midi_out, MOTU_PORT_SUBSTR)
-            .context("MOTU UltraLite mk5 MIDI output port not found")?;
-        let in_port = find_port(&midi_in, MOTU_PORT_SUBSTR)
-            .context("MOTU UltraLite mk5 MIDI input port not found")?;
-
-        let output = midi_out
-            .connect(&out_port, "motu-mk5")
-            .map_err(|e| anyhow::anyhow!("failed to open MIDI output: {e}"))?;
-
-        let input = midi_in
-            .connect(
-                &in_port,
-                "motu-mk5",
-                move |_timestamp, message, _| {
-                    if message.len() >= 6
-                        && message[0] == 0xF0
-                        && message[1] == 0x00
-                        && message[2] == 0x00
-                        && message[3] == 0x3B
-                    {
-                        let _ = tx.send(message.to_vec());
-                    }
-                },
-                (),
-            )
-            .map_err(|e| anyhow::anyhow!("failed to open MIDI input: {e}"))?;
-
-        info!("connected to MOTU UltraLite mk5 via MIDI");
-
-        Ok(MidiConnection {
-            _input: input,
-            output,
-            rx,
-        })
-    }
-
-    pub fn probe(&mut self) -> Result<bool> {
-        debug!("sending protocol probe");
-        self.output
-            .send(&sysex::build_probe())
-            .map_err(|e| anyhow::anyhow!("send failed: {e}"))?;
-
-        match self.rx.recv_timeout(CONNECT_TIMEOUT) {
-            Ok(msg) => {
-                if let Some(parsed) = sysex::parse_message(&msg) {
-                    if parsed.request_id == sysex::RequestId::ProtocolProbe {
-                        info!("MOTU protocol probe confirmed");
-                        return Ok(true);
-                    }
-                }
-                warn!("unexpected response to probe");
-                Ok(false)
+        match ws.get_mut() {
+            MaybeTlsStream::Plain(s) => {
+                s.set_read_timeout(Some(WS_READ_TIMEOUT)).ok();
+                s.set_nodelay(true).ok();
             }
-            Err(_) => {
-                warn!("probe timed out");
-                Ok(false)
+            _ => {}
+        }
+
+        let first = ws.read()
+            .context("no initial message from device")?;
+
+        match &first {
+            Message::Binary(data) if data.len() >= 4 => {
+                let prop_id = (data[0] as u16) << 8 | data[1] as u16;
+                info!("connected to MOTU via WebSocket (first prop={prop_id:#06x})");
+            }
+            _ => {
+                info!("connected to MOTU via WebSocket");
             }
         }
-    }
 
-    pub fn enable_api(&mut self) -> Result<()> {
-        debug!("enabling SysEx property API");
-        self.output
-            .send(&sysex::build_enable_api())
-            .map_err(|e| anyhow::anyhow!("send failed: {e}"))?;
-        info!("SysEx property API enabled");
-        Ok(())
+        Ok(DeviceConnection { ws, device_ip: ip })
     }
 
     pub fn send_property(&mut self, prop_id: u16, index: u16, data: &[u8]) -> Result<()> {
-        let msg = sysex::build_set_property(prop_id, index, data);
-        self.output
-            .send(&msg)
-            .map_err(|e| anyhow::anyhow!("send failed: {e}"))?;
+        let mut buf = Vec::with_capacity(4 + data.len());
+        buf.extend_from_slice(&prop_id.to_be_bytes());
+        buf.extend_from_slice(&index.to_be_bytes());
+        buf.extend_from_slice(data);
+
+        self.ws.send(Message::Binary(buf.into()))
+            .context("failed to send property")?;
         Ok(())
     }
 
-    pub fn recv(&self) -> Option<Vec<u8>> {
-        self.rx.try_recv().ok()
-    }
-
-    pub fn recv_timeout(&self, timeout: Duration) -> Option<Vec<u8>> {
-        self.rx.recv_timeout(timeout).ok()
-    }
-}
-
-fn find_port<T: midir::MidiIO>(midi: &T, name_substr: &str) -> Option<T::Port> {
-    for port in midi.ports() {
-        if let Ok(name) = midi.port_name(&port) {
-            debug!("found MIDI port: {name}");
-            if name.contains(name_substr) {
-                info!("matched MOTU port: {name}");
-                return Some(port);
+    pub fn recv(&mut self) -> Option<(u16, u16, Vec<u8>)> {
+        match self.ws.read() {
+            Ok(Message::Binary(data)) if data.len() >= 4 => {
+                let prop_id = (data[0] as u16) << 8 | data[1] as u16;
+                let index = (data[2] as u16) << 8 | data[3] as u16;
+                let payload = data[4..].to_vec();
+                Some((prop_id, index, payload))
+            }
+            Ok(Message::Ping(data)) => {
+                let _ = self.ws.send(Message::Pong(data));
+                None
+            }
+            Ok(_) => None,
+            Err(tungstenite::Error::Io(ref e))
+                if e.kind() == std::io::ErrorKind::WouldBlock
+                    || e.kind() == std::io::ErrorKind::TimedOut => None,
+            Err(e) => {
+                debug!("ws read error: {e}");
+                None
             }
         }
     }
-    None
+
+    pub fn recv_timeout(&mut self, timeout: Duration) -> Option<(u16, u16, Vec<u8>)> {
+        let start = std::time::Instant::now();
+        while start.elapsed() < timeout {
+            if let Some(msg) = self.recv() {
+                return Some(msg);
+            }
+        }
+        None
+    }
+}
+
+fn discover_device() -> Result<String> {
+    use std::net::SocketAddr;
+
+    let addr: SocketAddr = format!("0.0.0.0:{DISCOVERY_PORT}").parse().unwrap();
+    let sock = socket2::Socket::new(
+        socket2::Domain::IPV4,
+        socket2::Type::DGRAM,
+        Some(socket2::Protocol::UDP),
+    ).context("failed to create discovery socket")?;
+    sock.set_reuse_address(true).ok();
+    sock.bind(&addr.into()).context("failed to bind discovery socket")?;
+    sock.set_read_timeout(Some(DISCOVERY_TIMEOUT)).ok();
+
+    let listen: UdpSocket = sock.into();
+
+    info!("listening for MOTU discovery on UDP {DISCOVERY_PORT}...");
+
+    let mut buf = [0u8; 4096];
+    loop {
+        let (len, addr) = listen.recv_from(&mut buf)
+            .context("discovery timed out — is the MOTU connected?")?;
+
+        let text = std::str::from_utf8(&buf[..len]).unwrap_or("");
+        if let Ok(json) = serde_json::from_str::<serde_json::Value>(text) {
+            if json.get("model").and_then(|m| m.as_str()) == Some("UltraLite-mk5") {
+                let ip = json.get("ip")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or(&addr.ip().to_string())
+                    .to_string();
+                return Ok(ip);
+            }
+        }
+    }
 }

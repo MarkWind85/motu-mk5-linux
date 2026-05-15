@@ -7,8 +7,8 @@ use anyhow::{Context, Result};
 use log::{info, debug};
 use serde::{Deserialize, Serialize};
 
-use crate::protocol::{properties, sysex, types::*};
-use super::connection::MidiConnection;
+use crate::protocol::{properties, types::*};
+use super::connection::DeviceConnection;
 
 const STATE_DIR: &str = "motu-mk5";
 const STATE_FILE: &str = "device-state.json";
@@ -61,43 +61,27 @@ impl DeviceState {
 }
 
 pub struct DeviceManager {
-    conn: MidiConnection,
+    conn: DeviceConnection,
     pub state: DeviceState,
 }
 
 impl DeviceManager {
     pub fn connect() -> Result<Self> {
-        let mut conn = MidiConnection::open()?;
-
-        if !conn.probe()? {
-            anyhow::bail!("device did not respond to protocol probe");
-        }
-        conn.enable_api()?;
-
+        let conn = DeviceConnection::open()?;
         let state = DeviceState::load();
         info!("device manager ready");
-
         Ok(DeviceManager { conn, state })
     }
 
     pub fn sync_from_device(&mut self) -> Result<usize> {
-        let timeout = Duration::from_millis(200);
+        let timeout = Duration::from_millis(500);
         let mut count = 0;
 
-        while let Some(raw) = self.conn.recv_timeout(timeout) {
-            if let Some(parsed) = sysex::parse_message(&raw) {
-                if parsed.request_id == sysex::RequestId::SetProperty {
-                    if let Some(prop_msg) = sysex::parse_property(&parsed.payload) {
-                        if let Some(def) = properties::find_by_id(prop_msg.prop_id) {
-                            if let Some(value) =
-                                PropertyValue::decode(def.prop_type, &prop_msg.data)
-                            {
-                                self.state
-                                    .set(def.name, prop_msg.index as usize, value);
-                                count += 1;
-                            }
-                        }
-                    }
+        while let Some((prop_id, index, data)) = self.conn.recv_timeout(timeout) {
+            if let Some(def) = properties::find_by_id(prop_id) {
+                if let Some(value) = PropertyValue::decode(def.prop_type, &data) {
+                    self.state.set(def.name, index as usize, value);
+                    count += 1;
                 }
             }
         }
@@ -154,20 +138,11 @@ impl DeviceManager {
 
     pub fn process_incoming(&mut self) -> usize {
         let mut count = 0;
-        while let Some(raw) = self.conn.recv() {
-            if let Some(parsed) = sysex::parse_message(&raw) {
-                if parsed.request_id == sysex::RequestId::SetProperty {
-                    if let Some(prop_msg) = sysex::parse_property(&parsed.payload) {
-                        if let Some(def) = properties::find_by_id(prop_msg.prop_id) {
-                            if let Some(value) =
-                                PropertyValue::decode(def.prop_type, &prop_msg.data)
-                            {
-                                self.state
-                                    .set(def.name, prop_msg.index as usize, value);
-                                count += 1;
-                            }
-                        }
-                    }
+        while let Some((prop_id, index, data)) = self.conn.recv() {
+            if let Some(def) = properties::find_by_id(prop_id) {
+                if let Some(value) = PropertyValue::decode(def.prop_type, &data) {
+                    self.state.set(def.name, index as usize, value);
+                    count += 1;
                 }
             }
         }
