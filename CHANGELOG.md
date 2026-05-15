@@ -2,6 +2,14 @@
 
 ## 0.2.0
 
+### Wine/Proton support
+
+Wine's `winepulse.drv` rejects any sink with more than 18 channels, so the 22-channel pro-audio device cannot be used directly. A PipeWire stream rule now automatically routes all Wine/Proton audio to the 2-channel Main 1/2 loopback — no per-game launch options required. Audio is hardcoded to Main 1/2.
+
+### Dynamic ALSA node discovery
+
+The daemon now discovers ALSA node names from PipeWire at startup instead of using hardcoded names. The ALSA card index changes between reboots and USB re-enumerations, which previously caused loopbacks to silently fail to reach the hardware.
+
 ### Independent I/O selection
 
 Output and input devices are now independently selectable in GNOME Settings. The daemon creates 7 virtual output devices and 5 virtual input devices, each routed to the correct physical I/O pair on the MOTU.
