@@ -8,10 +8,8 @@ Source0:        %{name}-%{version}.tar.gz
 
 BuildRequires:  rust >= 1.75
 BuildRequires:  cargo
-BuildRequires:  alsa-lib-devel
 Requires:       pipewire
 Requires:       wireplumber
-Requires:       alsa-lib
 
 %description
 Native Linux integration for the MOTU UltraLite mk5 audio interface.
