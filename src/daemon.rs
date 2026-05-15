@@ -136,19 +136,11 @@ fn main() -> Result<()> {
 
 fn ctrlc_handler(running: Arc<AtomicBool>) {
     use nix::sys::signal::{self, SigHandler, Signal};
-    use std::sync::atomic::AtomicPtr;
 
-    static FLAG: AtomicPtr<AtomicBool> = AtomicPtr::new(std::ptr::null_mut());
+    static SIGNAL_RECEIVED: AtomicBool = AtomicBool::new(false);
 
-    let leaked = Box::into_raw(Box::new(AtomicBool::new(true)));
-    FLAG.store(leaked, Ordering::Release);
-
-    let r = running.clone();
     extern "C" fn handler(_: i32) {
-        let ptr = FLAG.load(Ordering::Acquire);
-        if !ptr.is_null() {
-            unsafe { &*ptr }.store(false, Ordering::Relaxed);
-        }
+        SIGNAL_RECEIVED.store(true, Ordering::Relaxed);
     }
 
     unsafe {
@@ -157,13 +149,9 @@ fn ctrlc_handler(running: Arc<AtomicBool>) {
     }
 
     thread::spawn(move || {
-        let flag = unsafe { &*FLAG.load(Ordering::Acquire) };
-        loop {
-            if !flag.load(Ordering::Relaxed) {
-                r.store(false, Ordering::Relaxed);
-                break;
-            }
+        while !SIGNAL_RECEIVED.load(Ordering::Relaxed) {
             thread::sleep(Duration::from_millis(50));
         }
+        running.store(false, Ordering::Relaxed);
     });
 }
