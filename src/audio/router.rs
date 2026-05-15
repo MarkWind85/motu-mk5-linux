@@ -55,22 +55,38 @@ impl AudioRouter {
 
     fn enforce_rate(&self) {
         info!("enforcing sample rate: {}Hz", self.sample_rate);
-        let _ = Command::new("pw-metadata")
+        match Command::new("pw-metadata")
             .args(["-n", "settings", "0", "clock.force-rate", &self.sample_rate.to_string()])
             .stdin(std::process::Stdio::null())
             .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .status();
+            .stderr(std::process::Stdio::piped())
+            .output()
+        {
+            Ok(out) if !out.status.success() => {
+                let stderr = String::from_utf8_lossy(&out.stderr);
+                warn!("pw-metadata failed ({}): {}", out.status, stderr.trim());
+            }
+            Err(e) => warn!("failed to run pw-metadata: {e}"),
+            _ => {}
+        }
     }
 
     fn enforce_alsa_volume(&self) {
         info!("enforcing 100% volume on ALSA sink");
-        let _ = Command::new("pactl")
+        match Command::new("pactl")
             .args(["set-sink-volume", &self.alsa_output, "100%"])
             .stdin(std::process::Stdio::null())
             .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .status();
+            .stderr(std::process::Stdio::piped())
+            .output()
+        {
+            Ok(out) if !out.status.success() => {
+                let stderr = String::from_utf8_lossy(&out.stderr);
+                warn!("pactl set-sink-volume failed ({}): {}", out.status, stderr.trim());
+            }
+            Err(e) => warn!("failed to run pactl: {e}"),
+            _ => {}
+        }
     }
 
     pub fn start(&mut self) -> Result<()> {
@@ -78,17 +94,32 @@ impl AudioRouter {
 
         self.enforce_rate();
 
-        for pair in OUTPUTS {
-            let child = self.spawn_output(pair)
-                .with_context(|| format!("failed to spawn {}", pair.description))?;
-            self.children.push(child);
+        let mut new_children = Vec::new();
+
+        let result = (|| -> Result<()> {
+            for pair in OUTPUTS {
+                let child = self.spawn_output(pair)
+                    .with_context(|| format!("failed to spawn {}", pair.description))?;
+                new_children.push(child);
+            }
+
+            for pair in INPUTS {
+                let child = self.spawn_input(pair)
+                    .with_context(|| format!("failed to spawn {}", pair.description))?;
+                new_children.push(child);
+            }
+            Ok(())
+        })();
+
+        if let Err(e) = result {
+            for mut child in new_children {
+                let _ = child.kill();
+                let _ = child.wait();
+            }
+            return Err(e);
         }
 
-        for pair in INPUTS {
-            let child = self.spawn_input(pair)
-                .with_context(|| format!("failed to spawn {}", pair.description))?;
-            self.children.push(child);
-        }
+        self.children = new_children;
 
         self.enforce_alsa_volume();
 

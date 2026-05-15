@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.3.0
+
+### Runtime error handling
+
+- **WebSocket disconnect detection**: The daemon now detects when the device disconnects and automatically reconnects. Previously, a dropped USB connection left the daemon running but silently doing nothing — device state changes were lost, and stale state was pushed back on restart.
+- **ALSA discovery retry**: Node discovery retries up to 10 times with exponential backoff (1s–16s) instead of exiting immediately. The daemon continues without audio routing if all attempts fail, so device control still works during PipeWire startup delays.
+- **Corrupted state recovery**: Corrupted state files are now logged, backed up to `device-state.json.corrupt`, and the daemon continues with default state instead of silently discarding saved settings.
+- **Atomic audio router start**: Loopback processes are now started atomically — if any channel fails to spawn, all already-started channels are cleaned up. No more partial audio routing with missing channels.
+- **Command error visibility**: `pw-metadata` and `pactl` failures are now logged with stderr output instead of being silently ignored.
+- **Signal handler logging**: Signal registration failures are logged instead of silently ignored.
+- **Systemd restart limits**: The service now stops restarting after 5 failures in 60 seconds instead of crash-looping indefinitely.
+
 ## 0.2.1
 
 ### Wine/Proton support

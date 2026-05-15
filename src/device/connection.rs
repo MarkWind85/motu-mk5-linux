@@ -1,3 +1,4 @@
+use std::fmt;
 use std::net::UdpSocket;
 use std::time::Duration;
 
@@ -9,6 +10,23 @@ use tungstenite::stream::MaybeTlsStream;
 const DISCOVERY_PORT: u16 = 1280;
 const DISCOVERY_TIMEOUT: Duration = Duration::from_secs(5);
 const WS_READ_TIMEOUT: Duration = Duration::from_millis(100);
+
+#[derive(Debug)]
+pub enum ConnectionError {
+    Disconnected(String),
+    Protocol(String),
+}
+
+impl fmt::Display for ConnectionError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ConnectionError::Disconnected(msg) => write!(f, "device disconnected: {msg}"),
+            ConnectionError::Protocol(msg) => write!(f, "protocol error: {msg}"),
+        }
+    }
+}
+
+impl std::error::Error for ConnectionError {}
 
 pub struct DeviceConnection {
     ws: tungstenite::WebSocket<MaybeTlsStream<std::net::TcpStream>>,
@@ -59,37 +77,46 @@ impl DeviceConnection {
         Ok(())
     }
 
-    pub fn recv(&mut self) -> Option<(u16, u16, Vec<u8>)> {
+    pub fn recv(&mut self) -> std::result::Result<Option<(u16, u16, Vec<u8>)>, ConnectionError> {
         match self.ws.read() {
             Ok(Message::Binary(data)) if data.len() >= 4 => {
                 let prop_id = (data[0] as u16) << 8 | data[1] as u16;
                 let index = (data[2] as u16) << 8 | data[3] as u16;
                 let payload = data[4..].to_vec();
-                Some((prop_id, index, payload))
+                Ok(Some((prop_id, index, payload)))
             }
             Ok(Message::Ping(data)) => {
                 let _ = self.ws.send(Message::Pong(data));
-                None
+                Ok(None)
             }
-            Ok(_) => None,
+            Ok(_) => Ok(None),
             Err(tungstenite::Error::Io(ref e))
                 if e.kind() == std::io::ErrorKind::WouldBlock
-                    || e.kind() == std::io::ErrorKind::TimedOut => None,
+                    || e.kind() == std::io::ErrorKind::TimedOut => Ok(None),
+            Err(tungstenite::Error::ConnectionClosed) =>
+                Err(ConnectionError::Disconnected("connection closed".into())),
+            Err(tungstenite::Error::AlreadyClosed) =>
+                Err(ConnectionError::Disconnected("already closed".into())),
+            Err(tungstenite::Error::Io(e)) =>
+                Err(ConnectionError::Disconnected(e.to_string())),
+            Err(tungstenite::Error::Protocol(e)) =>
+                Err(ConnectionError::Protocol(e.to_string())),
             Err(e) => {
                 debug!("ws read error: {e}");
-                None
+                Err(ConnectionError::Protocol(e.to_string()))
             }
         }
     }
 
-    pub fn recv_timeout(&mut self, timeout: Duration) -> Option<(u16, u16, Vec<u8>)> {
+    pub fn recv_timeout(&mut self, timeout: Duration) -> std::result::Result<Option<(u16, u16, Vec<u8>)>, ConnectionError> {
         let start = std::time::Instant::now();
         while start.elapsed() < timeout {
-            if let Some(msg) = self.recv() {
-                return Some(msg);
+            match self.recv()? {
+                Some(msg) => return Ok(Some(msg)),
+                None => {}
             }
         }
-        None
+        Ok(None)
     }
 }
 

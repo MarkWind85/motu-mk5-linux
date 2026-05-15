@@ -51,25 +51,63 @@ fn main() -> Result<()> {
     let r = running.clone();
     ctrlc_handler(r);
 
-    let (alsa_output, alsa_input) = discover_alsa_nodes()?;
-    info!("ALSA output: {alsa_output}");
-    info!("ALSA input:  {alsa_input}");
+    let alsa_nodes = {
+        let mut result = None;
+        let mut delay = 1u64;
+        for attempt in 1..=10 {
+            match discover_alsa_nodes() {
+                Ok(nodes) => {
+                    result = Some(nodes);
+                    break;
+                }
+                Err(e) => {
+                    if !running.load(Ordering::Relaxed) {
+                        break;
+                    }
+                    warn!("ALSA discovery attempt {attempt}/10 failed: {e}");
+                    info!("retrying in {delay}s...");
+                    for _ in 0..(delay * 10) {
+                        if !running.load(Ordering::Relaxed) {
+                            break;
+                        }
+                        thread::sleep(Duration::from_millis(100));
+                    }
+                    delay = (delay * 2).min(16);
+                }
+            }
+        }
+        result
+    };
 
-    let mut router = AudioRouter::new(alsa_output, alsa_input);
-    if let Err(e) = router.start() {
-        error!("failed to start audio router: {e}");
-    }
+    let mut router = match alsa_nodes {
+        Some((ref alsa_output, ref alsa_input)) => {
+            info!("ALSA output: {alsa_output}");
+            info!("ALSA input:  {alsa_input}");
+            let mut r = AudioRouter::new(alsa_output.clone(), alsa_input.clone());
+            if let Err(e) = r.start() {
+                error!("failed to start audio router: {e}");
+            }
+            Some(r)
+        }
+        None => {
+            error!("MOTU ALSA nodes not found after 10 attempts. Audio routing unavailable. \
+                    Check that PipeWire is running and the device is connected.");
+            None
+        }
+    };
 
     loop {
         if !running.load(Ordering::Relaxed) {
             break;
         }
 
-        if !router.is_running() {
-            warn!("audio router died, restarting");
-            router.stop();
-            if let Err(e) = router.start() {
-                error!("failed to restart audio router: {e}");
+        if let Some(ref mut r) = router {
+            if !r.is_running() {
+                warn!("audio router died, restarting");
+                r.stop();
+                if let Err(e) = r.start() {
+                    error!("failed to restart audio router: {e}");
+                }
             }
         }
 
@@ -78,8 +116,13 @@ fn main() -> Result<()> {
                 info!("connected to device, syncing state...");
 
                 thread::sleep(Duration::from_millis(500));
-                let received = mgr.sync_from_device()?;
-                info!("received {received} properties from device");
+                match mgr.sync_from_device() {
+                    Ok(received) => info!("received {received} properties from device"),
+                    Err(e) => {
+                        error!("lost connection during initial sync: {e}");
+                        continue;
+                    }
+                }
 
                 if !mgr.state.values.is_empty() {
                     match mgr.restore_to_device() {
@@ -89,28 +132,42 @@ fn main() -> Result<()> {
                 }
 
                 while running.load(Ordering::Relaxed) {
-                    let count = mgr.process_incoming();
-                    if count > 0 {
-                        if let Err(e) = mgr.save_state() {
-                            warn!("failed to save state: {e}");
+                    match mgr.process_incoming() {
+                        Ok(count) => {
+                            if count > 0 {
+                                if let Err(e) = mgr.save_state() {
+                                    warn!("failed to save state: {e}");
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            error!("device connection lost: {e}");
+                            if let Err(e) = mgr.save_state() {
+                                error!("failed to save state before reconnect: {e}");
+                            }
+                            break;
                         }
                     }
 
-                    if !router.is_running() {
-                        warn!("audio router died, restarting");
-                        router.stop();
-                        if let Err(e) = router.start() {
-                            error!("failed to restart audio router: {e}");
+                    if let Some(ref mut r) = router {
+                        if !r.is_running() {
+                            warn!("audio router died, restarting");
+                            r.stop();
+                            if let Err(e) = r.start() {
+                                error!("failed to restart audio router: {e}");
+                            }
                         }
                     }
 
                     thread::sleep(Duration::from_millis(10));
                 }
 
-                if let Err(e) = mgr.save_state() {
-                    error!("failed to save final state: {e}");
+                if !running.load(Ordering::Relaxed) {
+                    if let Err(e) = mgr.save_state() {
+                        error!("failed to save final state: {e}");
+                    }
+                    info!("state saved, shutting down");
                 }
-                info!("state saved, shutting down");
             }
             Err(e) => {
                 if !running.load(Ordering::Relaxed) {
@@ -128,7 +185,9 @@ fn main() -> Result<()> {
         }
     }
 
-    router.stop();
+    if let Some(ref mut r) = router {
+        r.stop();
+    }
 
     info!("motu-mk5d stopped");
     Ok(())
@@ -144,8 +203,12 @@ fn ctrlc_handler(running: Arc<AtomicBool>) {
     }
 
     unsafe {
-        let _ = signal::signal(Signal::SIGINT, SigHandler::Handler(handler));
-        let _ = signal::signal(Signal::SIGTERM, SigHandler::Handler(handler));
+        if let Err(e) = signal::signal(Signal::SIGINT, SigHandler::Handler(handler)) {
+            warn!("failed to register SIGINT handler: {e}");
+        }
+        if let Err(e) = signal::signal(Signal::SIGTERM, SigHandler::Handler(handler)) {
+            warn!("failed to register SIGTERM handler: {e}");
+        }
     }
 
     thread::spawn(move || {

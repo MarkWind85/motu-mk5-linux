@@ -8,6 +8,8 @@ Type=simple
 ExecStart=/usr/local/bin/motu-mk5d
 Restart=on-failure
 RestartSec=3
+StartLimitBurst=5
+StartLimitIntervalSec=60
 
 [Install]
 WantedBy=default.target

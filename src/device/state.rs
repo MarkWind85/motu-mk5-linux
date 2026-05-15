@@ -27,7 +27,19 @@ impl DeviceState {
     pub fn load() -> Self {
         let path = Self::state_path();
         match fs::read_to_string(&path) {
-            Ok(data) => serde_json::from_str(&data).unwrap_or_default(),
+            Ok(data) => match serde_json::from_str(&data) {
+                Ok(state) => state,
+                Err(e) => {
+                    log::warn!("corrupted state file at {}: {e}", path.display());
+                    let corrupt = path.with_extension("json.corrupt");
+                    if let Err(copy_err) = fs::copy(&path, &corrupt) {
+                        log::warn!("failed to back up corrupted state: {copy_err}");
+                    } else {
+                        log::info!("corrupted state backed up to {}", corrupt.display());
+                    }
+                    Self::default()
+                }
+            },
             Err(_) => {
                 debug!("no saved state at {}", path.display());
                 Self::default()
@@ -77,12 +89,18 @@ impl DeviceManager {
         let timeout = Duration::from_millis(500);
         let mut count = 0;
 
-        while let Some((prop_id, index, data)) = self.conn.recv_timeout(timeout) {
-            if let Some(def) = properties::find_by_id(prop_id) {
-                if let Some(value) = PropertyValue::decode(def.prop_type, &data) {
-                    self.state.set(def.name, index as usize, value);
-                    count += 1;
+        loop {
+            match self.conn.recv_timeout(timeout) {
+                Ok(Some((prop_id, index, data))) => {
+                    if let Some(def) = properties::find_by_id(prop_id) {
+                        if let Some(value) = PropertyValue::decode(def.prop_type, &data) {
+                            self.state.set(def.name, index as usize, value);
+                            count += 1;
+                        }
+                    }
                 }
+                Ok(None) => break,
+                Err(e) => return Err(anyhow::anyhow!(e)),
             }
         }
 
@@ -136,17 +154,23 @@ impl DeviceManager {
         self.state.save()
     }
 
-    pub fn process_incoming(&mut self) -> usize {
+    pub fn process_incoming(&mut self) -> Result<usize> {
         let mut count = 0;
-        while let Some((prop_id, index, data)) = self.conn.recv() {
-            if let Some(def) = properties::find_by_id(prop_id) {
-                if let Some(value) = PropertyValue::decode(def.prop_type, &data) {
-                    self.state.set(def.name, index as usize, value);
-                    count += 1;
+        loop {
+            match self.conn.recv() {
+                Ok(Some((prop_id, index, data))) => {
+                    if let Some(def) = properties::find_by_id(prop_id) {
+                        if let Some(value) = PropertyValue::decode(def.prop_type, &data) {
+                            self.state.set(def.name, index as usize, value);
+                            count += 1;
+                        }
+                    }
                 }
+                Ok(None) => break,
+                Err(e) => return Err(anyhow::anyhow!(e)),
             }
         }
-        count
+        Ok(count)
     }
 }
 
