@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.0
+
+### Installation error handling
+
+- **postinst phased execution**: Install script now reports per-user failures individually instead of silencing all errors. Critical config installs (WirePlumber, PipeWire pulse) report warnings on failure. Audio stack restart failures are reported per-user.
+- **Post-install validation**: After install, verifies that binaries are on PATH, ALSA profile exists, and udev rules are in place. Reports warnings for any missing components instead of always claiming success.
+- **Makefile preflight checks**: `make install` now checks for required tools (`pw-loopback`, `pw-cli`, `systemctl`) before building. Warns if optional tools (`pactl`, `pw-metadata`) are missing. Verifies PipeWire and WirePlumber restarted successfully after install.
+
 ## 0.3.0
 
 ### Runtime error handling

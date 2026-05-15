@@ -1,41 +1,107 @@
 #!/bin/sh
 set -e
 
+# --- Phase 1: System-level setup (best-effort, these affect next plug/reboot) ---
+
 udevadm control --reload-rules 2>/dev/null || true
 udevadm trigger --subsystem-match=sound 2>/dev/null || true
 
+# --- Phase 2: Per-user config installation ---
+
+install_errors=0
+
 for d in /home/*; do
     [ -d "$d" ] || continue
+    user=$(basename "$d")
+
     # Remove legacy user-local WirePlumber rule (older Makefile installed here, shadows the system rule)
     rm -f "$d/.config/wireplumber/main.lua.d/51-motu-mk5.lua" 2>/dev/null || true
+
     # Install WirePlumber drop-in to clear stale MOTU profile cache on every start
-    install -Dm644 /usr/share/motu-mk5/wireplumber-motu-mk5.conf \
-        "$d/.config/systemd/user/wireplumber.service.d/motu-mk5.conf" 2>/dev/null || true
+    if ! install -Dm644 /usr/share/motu-mk5/wireplumber-motu-mk5.conf \
+        "$d/.config/systemd/user/wireplumber.service.d/motu-mk5.conf" 2>/dev/null; then
+        echo "WARNING: failed to install WirePlumber config for $user" >&2
+        install_errors=$((install_errors + 1))
+    fi
+
     # Install Wine/Proton audio routing (routes to 2ch stereo loopback)
-    install -Dm644 /usr/share/motu-mk5/50-motu-wine-routing.conf \
-        "$d/.config/pipewire/pipewire-pulse.conf.d/50-motu-wine-routing.conf" 2>/dev/null || true
+    if ! install -Dm644 /usr/share/motu-mk5/50-motu-wine-routing.conf \
+        "$d/.config/pipewire/pipewire-pulse.conf.d/50-motu-wine-routing.conf" 2>/dev/null; then
+        echo "WARNING: failed to install Wine routing config for $user" >&2
+        install_errors=$((install_errors + 1))
+    fi
+
     # Clear stale MOTU profile cache
     sed -i '/alsa_card.usb-MOTU_UltraLite/d' "$d/.local/state/wireplumber/default-profile" 2>/dev/null || true
 done
 
-# Restart audio stack for each logged-in user so new profiles take effect immediately
+# --- Phase 3: Audio stack restart per logged-in user ---
+
+restart_ok=0
+restart_fail=0
+
 loginctl list-users --no-legend 2>/dev/null | awk '{print $1}' | while read -r uid; do
     [ -n "$uid" ] || continue
     su_user=$(getent passwd "$uid" | cut -d: -f1)
     [ -n "$su_user" ] || continue
+
+    # Stop audio stack
     su -l "$su_user" -c "XDG_RUNTIME_DIR=/run/user/$uid systemctl --user stop pipewire.socket pipewire-pulse.socket pipewire pipewire-pulse wireplumber" 2>/dev/null || true
     pkill -u "$uid" -x pipewire 2>/dev/null || true
     pkill -u "$uid" -x wireplumber 2>/dev/null || true
     pkill -u "$uid" -x pipewire-pulse 2>/dev/null || true
     sleep 1
+
+    # Reload and enable services
     su -l "$su_user" -c "XDG_RUNTIME_DIR=/run/user/$uid systemctl --user daemon-reload" 2>/dev/null || true
     su -l "$su_user" -c "XDG_RUNTIME_DIR=/run/user/$uid systemctl --user enable motu-mk5d.service" 2>/dev/null || true
     su -l "$su_user" -c "XDG_RUNTIME_DIR=/run/user/$uid systemctl --user enable --now motu-mk5-update.timer" 2>/dev/null || true
-    su -l "$su_user" -c "XDG_RUNTIME_DIR=/run/user/$uid systemctl --user start pipewire.socket pipewire-pulse.socket wireplumber" 2>/dev/null || true
+
+    # Restart audio stack
+    if su -l "$su_user" -c "XDG_RUNTIME_DIR=/run/user/$uid systemctl --user start pipewire.socket pipewire-pulse.socket wireplumber" 2>/dev/null; then
+        restart_ok=$((restart_ok + 1))
+    else
+        echo "WARNING: failed to restart audio stack for $su_user" >&2
+        restart_fail=$((restart_fail + 1))
+    fi
 done
 
+# --- Phase 4: Post-install validation ---
+
 echo ""
-echo "motu-mk5 installed. Audio stack restarted with new profiles."
+
+validation_ok=true
+
+if ! command -v motu-mk5d >/dev/null 2>&1; then
+    echo "WARNING: motu-mk5d binary not found on PATH" >&2
+    validation_ok=false
+fi
+
+if ! command -v motu-ctl >/dev/null 2>&1; then
+    echo "WARNING: motu-ctl binary not found on PATH" >&2
+    validation_ok=false
+fi
+
+if [ ! -f /usr/share/alsa-card-profile/mixer/profile-sets/motu-ultralite-mk5.conf ]; then
+    echo "WARNING: ALSA card profile not found" >&2
+    validation_ok=false
+fi
+
+if [ ! -f /etc/udev/rules.d/89-motu-mk5.rules ]; then
+    echo "WARNING: udev rules not found" >&2
+    validation_ok=false
+fi
+
+if [ "$validation_ok" = true ]; then
+    echo "motu-mk5 installed successfully. Audio stack restarted with new profiles."
+else
+    echo "motu-mk5 installed with warnings (see above). Some components may need manual setup."
+fi
+
+if [ $install_errors -gt 0 ]; then
+    echo "  $install_errors user config(s) failed to install — check warnings above."
+fi
+
 echo ""
 echo "Update checks run daily. To opt out:"
 echo "  echo 'enabled=false' > ~/.config/motu-mk5/update.conf"
