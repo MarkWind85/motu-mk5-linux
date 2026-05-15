@@ -43,6 +43,14 @@ Select these in GNOME Sound Settings under Output Device / Input Device:
 | MOTU Line In 7/8 | Analog line in 7-8 |
 | MOTU S/PDIF In | S/PDIF digital input |
 
+### Wine / Proton
+
+Wine and Proton games work out of the box. Audio is automatically routed to the Main 1/2 output — no launch options or per-game configuration needed.
+
+**Why this is needed:** Wine's PulseAudio driver rejects any audio device with more than 18 channels. The MOTU's pro-audio profile exposes 22 channels, so Wine can't use it directly. The package installs a PipeWire stream rule that routes all Wine/Proton audio to the 2-channel Main 1/2 stereo loopback instead.
+
+**Note:** Wine audio is hardcoded to Main 1/2. If you need Wine audio on a different output pair, edit `~/.config/pipewire/pipewire-pulse.conf.d/50-motu-wine-routing.conf` and change `target.object` to the desired sink name (e.g., `motu-phones` for the headphone output).
+
 ### Requirements
 
 - PipeWire + WirePlumber
@@ -96,6 +104,7 @@ The daemon (`motu-mk5d`) manages two independent subsystems:
 | `motu-mk5d.service` | systemd user service dir | Control daemon auto-start |
 | `motu-mk5d` | `/usr/bin/` | Daemon — audio router + WebSocket device control |
 | `motu-ctl` | `/usr/bin/` | CLI tool — read/write any device parameter |
+| `50-motu-wine-routing.conf` | `~/.config/pipewire/pipewire-pulse.conf.d/` | Routes Wine/Proton audio to Main 1/2 |
 
 ### Control protocol
 
@@ -172,6 +181,7 @@ src/
   lib.rs
 install/
   alsa-card-profile/  — ACP profile for channel mapping
+  pipewire-pulse/     — Wine/Proton audio routing rule
   wireplumber/        — WirePlumber device configuration
   udev/               — Device detection rules
   systemd/            — User service definition

@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.2.0
+## 0.2.1
 
 ### Wine/Proton support
 
@@ -9,6 +9,8 @@ Wine's `winepulse.drv` rejects any sink with more than 18 channels, so the 22-ch
 ### Dynamic ALSA node discovery
 
 The daemon now discovers ALSA node names from PipeWire at startup instead of using hardcoded names. The ALSA card index changes between reboots and USB re-enumerations, which previously caused loopbacks to silently fail to reach the hardware.
+
+## 0.2.0
 
 ### Independent I/O selection
 

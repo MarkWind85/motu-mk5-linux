@@ -1,5 +1,5 @@
 pkgname=motu-mk5
-pkgver=0.2.0
+pkgver=0.2.1
 pkgrel=1
 pkgdesc="Native Linux integration for the MOTU UltraLite mk5"
 arch=('x86_64')
