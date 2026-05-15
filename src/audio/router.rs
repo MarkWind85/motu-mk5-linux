@@ -63,6 +63,16 @@ impl AudioRouter {
             .status();
     }
 
+    fn enforce_alsa_volume(&self) {
+        info!("enforcing 100% volume on ALSA sink");
+        let _ = Command::new("pactl")
+            .args(["set-sink-volume", &self.alsa_output, "100%"])
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status();
+    }
+
     pub fn start(&mut self) -> Result<()> {
         info!("starting audio router ({} outputs, {} inputs)", OUTPUTS.len(), INPUTS.len());
 
@@ -79,6 +89,8 @@ impl AudioRouter {
                 .with_context(|| format!("failed to spawn {}", pair.description))?;
             self.children.push(child);
         }
+
+        self.enforce_alsa_volume();
 
         info!("audio router running: {} loopback processes", self.children.len());
         Ok(())
