@@ -1,0 +1,49 @@
+name: Connection / Device Detection Issue
+description: Device not found, connection drops, or daemon problems
+labels: ["bug", "connection"]
+body:
+  - type: checkboxes
+    id: symptoms
+    attributes:
+      label: What are you experiencing?
+      options:
+        - label: "Device not detected (\"MOTU device not found on network\")"
+        - label: Connection drops repeatedly
+        - label: Daemon crash-loops (keeps restarting)
+        - label: "Daemon running but not responding (\"device not available\")"
+        - label: Works after reboot but fails after USB replug
+        - label: Other (describe below)
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: When does this happen? What did you try?
+    validations:
+      required: false
+
+  - type: input
+    id: usb_connection
+    attributes:
+      label: USB connection
+      description: How is the MOTU connected? (direct, hub, USB-C adapter, etc)
+      placeholder: e.g. "USB-C directly to laptop"
+    validations:
+      required: false
+
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostic output
+      description: "Run `motu-ctl diagnose` and paste the output here."
+      render: markdown
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context
+      description: Anything else relevant.
+    validations:
+      required: false

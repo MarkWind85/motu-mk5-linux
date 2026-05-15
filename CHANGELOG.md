@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.0
+
+### Diagnostics and issue registration
+
+- **`motu-ctl diagnose` command**: Generates a full diagnostic report (system info, PipeWire state, USB device, network interface, ALSA nodes, device connection, audio router, daemon status, recent logs) as markdown ready to paste into a GitHub issue.
+- **Actionable error messages**: All user-facing errors now include what broke, likely cause, and what to do next. Persistent connection failures point to `motu-ctl diagnose`.
+- **GitHub issue templates**: Structured forms for bug reports, audio problems, connection issues, and feature requests. Audio and connection templates require diagnostic output.
+- **README troubleshooting section**: Common issues, how to check logs, how to generate a diagnostic report, and how to file an issue.
+
 ## 0.4.0
 
 ### Installation error handling

@@ -80,7 +80,37 @@ motu-ctl probe
 
 # Dump full device state as JSON
 motu-ctl dump
+
+# Generate a diagnostic report for troubleshooting
+motu-ctl diagnose
 ```
+
+### Troubleshooting
+
+**Check daemon status:**
+```bash
+systemctl --user status motu-mk5d
+```
+
+**View live logs:**
+```bash
+journalctl --user-unit motu-mk5d -f
+```
+
+**Generate a diagnostic report:**
+```bash
+motu-ctl diagnose
+```
+This collects system info, PipeWire state, device connection status, and recent logs in one command. Paste the output into a [GitHub issue](https://github.com/MarkWind85/motu-mk5-linux/issues/new/choose) if you need help.
+
+**Common issues:**
+
+| Problem | Likely cause | Fix |
+|---|---|---|
+| No MOTU devices in sound settings | PipeWire not running or profile not set | `systemctl --user restart pipewire wireplumber` |
+| "device not available" in logs | USB not connected or CDC Ethernet missing | Check `ip link` for a 169.254.x.x interface |
+| Audio crackling/dropouts | Sample rate mismatch or CPU load | Check `motu-ctl get sample_rate`, close heavy apps |
+| Daemon keeps restarting | PipeWire not ready at boot | Check logs — daemon retries automatically |
 
 ---
 
@@ -168,6 +198,7 @@ cargo deb
 ```
 src/
   audio/
+    discovery.rs    — ALSA node discovery from PipeWire
     router.rs       — pw-loopback management (spawn, stop, rate enforcement)
   protocol/
     sysex.rs        — MIDI SysEx framing (legacy, kept for reference)
@@ -176,6 +207,7 @@ src/
   device/
     connection.rs   — UDP discovery + WebSocket transport
     state.rs        — Device state manager (sync, persist, restore)
+  diagnostics.rs    — System diagnostic report generation
   daemon.rs         — motu-mk5d entry point
   ctl.rs            — motu-ctl entry point
   lib.rs

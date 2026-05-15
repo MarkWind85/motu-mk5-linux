@@ -1,0 +1,42 @@
+name: No Audio / Audio Problem
+description: Audio is not working or has issues
+labels: ["bug", "audio"]
+body:
+  - type: checkboxes
+    id: symptoms
+    attributes:
+      label: What are you experiencing?
+      options:
+        - label: No sound at all
+        - label: Device does not appear in sound settings
+        - label: Device appears but no audio plays
+        - label: Audio crackling or dropouts
+        - label: Wrong output device / audio going to wrong place
+        - label: Input (microphone) not working
+        - label: Audio stops after a while
+        - label: Other (describe below)
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Any additional details about the problem.
+    validations:
+      required: false
+
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostic output
+      description: "Run `motu-ctl diagnose` and paste the output here. This gives us everything we need to help."
+      render: markdown
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context
+      description: Anything else (other audio software running, sample rate, etc).
+    validations:
+      required: false

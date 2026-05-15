@@ -73,7 +73,7 @@ impl DeviceConnection {
         buf.extend_from_slice(data);
 
         self.ws.send(Message::Binary(buf.into()))
-            .context("failed to send property")?;
+            .context("failed to send property to device — connection may have dropped")?;
         Ok(())
     }
 
@@ -140,7 +140,9 @@ fn discover_device() -> Result<String> {
     let mut buf = [0u8; 4096];
     loop {
         let (len, addr) = listen.recv_from(&mut buf)
-            .context("discovery timed out — is the MOTU connected?")?;
+            .context("MOTU device not found on network (no UDP response on port 1280 after 5s). \
+                Check: (1) device is connected via USB, (2) CDC Ethernet interface exists (run: ip link). \
+                Run 'motu-ctl diagnose' for full report.")?;
 
         let text = std::str::from_utf8(&buf[..len]).unwrap_or("");
         if let Ok(json) = serde_json::from_str::<serde_json::Value>(text) {

@@ -39,6 +39,8 @@ enum Commands {
     Dump,
     /// Probe and identify the device
     Probe,
+    /// Generate a diagnostic report for troubleshooting
+    Diagnose,
 }
 
 fn main() -> Result<()> {
@@ -121,6 +123,10 @@ fn main() -> Result<()> {
 
             let json = serde_json::to_string_pretty(&mgr.state)?;
             println!("{json}");
+        }
+        Commands::Diagnose => {
+            let report = motu_mk5::diagnostics::generate_report();
+            println!("{report}");
         }
     }
 

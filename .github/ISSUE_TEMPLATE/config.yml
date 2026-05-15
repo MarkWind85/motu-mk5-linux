@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Troubleshooting
+    url: https://github.com/MarkWind85/motu-mk5-linux#troubleshooting
+    about: "Check the troubleshooting guide first. Run 'motu-ctl diagnose' to generate a diagnostic report."

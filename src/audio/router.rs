@@ -169,7 +169,7 @@ impl AudioRouter {
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
             .spawn()
-            .context("pw-loopback not found")
+            .context("pw-loopback failed to start — is pipewire installed?")
     }
 
     fn spawn_input(&self, pair: &IoPair) -> Result<Child> {
@@ -197,7 +197,7 @@ impl AudioRouter {
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
             .spawn()
-            .context("pw-loopback not found")
+            .context("pw-loopback failed to start — is pipewire installed?")
     }
 }
 

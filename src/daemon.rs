@@ -3,44 +3,12 @@ use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
-use anyhow::{bail, Context, Result};
+use anyhow::Result;
 use log::{error, info, warn};
 
+use motu_mk5::audio::discovery::discover_alsa_nodes;
 use motu_mk5::audio::router::AudioRouter;
 use motu_mk5::device::state::DeviceManager;
-
-fn discover_alsa_nodes() -> Result<(String, String)> {
-    let output = std::process::Command::new("pw-cli")
-        .args(["ls", "Node"])
-        .output()
-        .context("failed to run pw-cli")?;
-    let text = String::from_utf8_lossy(&output.stdout);
-
-    let mut alsa_output = None;
-    let mut alsa_input = None;
-
-    for line in text.lines() {
-        let trimmed = line.trim();
-        if let Some(rest) = trimmed.strip_prefix("node.name = \"") {
-            if let Some(name) = rest.strip_suffix('"') {
-                if name.starts_with("alsa_output.usb-MOTU_UltraLite")
-                    && name.ends_with("pro-output-0")
-                {
-                    alsa_output = Some(name.to_string());
-                } else if name.starts_with("alsa_input.usb-MOTU_UltraLite")
-                    && name.ends_with("pro-input-0")
-                {
-                    alsa_input = Some(name.to_string());
-                }
-            }
-        }
-    }
-
-    match (alsa_output, alsa_input) {
-        (Some(out), Some(inp)) => Ok((out, inp)),
-        _ => bail!("MOTU ALSA nodes not found in PipeWire — is the device connected?"),
-    }
-}
 
 fn main() -> Result<()> {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
@@ -85,7 +53,7 @@ fn main() -> Result<()> {
             info!("ALSA input:  {alsa_input}");
             let mut r = AudioRouter::new(alsa_output.clone(), alsa_input.clone());
             if let Err(e) = r.start() {
-                error!("failed to start audio router: {e}");
+                error!("audio router failed to start: {e}. Check that pw-loopback is installed (part of pipewire package).");
             }
             Some(r)
         }
@@ -106,7 +74,7 @@ fn main() -> Result<()> {
                 warn!("audio router died, restarting");
                 r.stop();
                 if let Err(e) = r.start() {
-                    error!("failed to restart audio router: {e}");
+                    error!("audio router restart failed: {e}. Check that pw-loopback is installed.");
                 }
             }
         }
@@ -141,7 +109,7 @@ fn main() -> Result<()> {
                             }
                         }
                         Err(e) => {
-                            error!("device connection lost: {e}");
+                            error!("device connection lost: {e}. Will attempt to reconnect.");
                             if let Err(e) = mgr.save_state() {
                                 error!("failed to save state before reconnect: {e}");
                             }
@@ -154,7 +122,7 @@ fn main() -> Result<()> {
                             warn!("audio router died, restarting");
                             r.stop();
                             if let Err(e) = r.start() {
-                                error!("failed to restart audio router: {e}");
+                                error!("audio router restart failed: {e}. Check that pw-loopback is installed.");
                             }
                         }
                     }
@@ -174,7 +142,7 @@ fn main() -> Result<()> {
                     break;
                 }
                 warn!("device not available: {e}");
-                info!("retrying in 5 seconds...");
+                info!("retrying in 5s. If this persists, run 'motu-ctl diagnose'.");
                 for _ in 0..50 {
                     if !running.load(Ordering::Relaxed) {
                         break;
