@@ -42,6 +42,7 @@ assets = [
     ["install/wireplumber/51-motu-mk5.lua", "usr/share/wireplumber/main.lua.d/", "644"],
     ["install/systemd/motu-mk5d.service", "usr/lib/systemd/user/", "644"],
     ["install/systemd/wireplumber-motu-mk5.conf", "usr/share/motu-mk5/", "644"],
+    ["install/pipewire-pulse/50-motu-wine-routing.conf", "usr/share/motu-mk5/", "644"],
     ["README.md", "usr/share/doc/motu-mk5/", "644"],
 ]
 conf-files = [

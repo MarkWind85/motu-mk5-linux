@@ -8,6 +8,8 @@ if [ "$1" = "remove" ] || [ "$1" = "purge" ]; then
         [ -d "$d" ] || continue
         rm -f "$d/.config/systemd/user/wireplumber.service.d/motu-mk5.conf" 2>/dev/null || true
         rmdir "$d/.config/systemd/user/wireplumber.service.d" 2>/dev/null || true
+        rm -f "$d/.config/pipewire/pipewire-pulse.conf.d/50-motu-wine-routing.conf" 2>/dev/null || true
+        rmdir "$d/.config/pipewire/pipewire-pulse.conf.d" 2>/dev/null || true
     done
     loginctl list-users --no-legend 2>/dev/null | awk '{print $1}' | while read -r uid; do
         [ -n "$uid" ] || continue

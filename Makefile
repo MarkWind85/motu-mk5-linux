@@ -4,6 +4,7 @@ UDEVDIR = /etc/udev/rules.d
 ACPDIR = /usr/share/alsa-card-profile/mixer/profile-sets
 WPDIR = $(HOME)/.config/wireplumber/main.lua.d
 SYSTEMD_USER_DIR = $(HOME)/.config/systemd/user
+PULSE_CONFDIR = $(HOME)/.config/pipewire/pipewire-pulse.conf.d
 
 .PHONY: build install uninstall clean
 
@@ -18,6 +19,7 @@ install: build
 	install -Dm644 install/wireplumber/51-motu-mk5.lua $(WPDIR)/51-motu-mk5.lua
 	install -Dm644 install/systemd/motu-mk5d.service $(SYSTEMD_USER_DIR)/motu-mk5d.service
 	install -Dm644 install/systemd/wireplumber-motu-mk5.conf $(SYSTEMD_USER_DIR)/wireplumber.service.d/motu-mk5.conf
+	install -Dm644 install/pipewire-pulse/50-motu-wine-routing.conf $(PULSE_CONFDIR)/50-motu-wine-routing.conf
 	udevadm control --reload-rules || true
 	systemctl --user stop pipewire.socket pipewire-pulse.socket pipewire pipewire-pulse wireplumber 2>/dev/null || true
 	pkill -u $(USER) -x pipewire 2>/dev/null || true
@@ -40,6 +42,7 @@ uninstall:
 	rm -f $(WPDIR)/51-motu-mk5.lua
 	rm -f $(SYSTEMD_USER_DIR)/motu-mk5d.service
 	rm -rf $(SYSTEMD_USER_DIR)/wireplumber.service.d/motu-mk5.conf
+	rm -f $(PULSE_CONFDIR)/50-motu-wine-routing.conf
 	udevadm control --reload-rules || true
 	systemctl --user daemon-reload || true
 	@echo "Uninstalled."

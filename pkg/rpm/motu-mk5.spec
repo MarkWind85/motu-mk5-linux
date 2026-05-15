@@ -30,6 +30,7 @@ install -Dm644 install/wireplumber/51-motu-mk5.lua %{buildroot}%{_datadir}/wirep
 install -Dm644 install/udev/89-motu-mk5.rules %{buildroot}%{_sysconfdir}/udev/rules.d/89-motu-mk5.rules
 install -Dm644 install/systemd/motu-mk5d.service %{buildroot}%{_prefix}/lib/systemd/user/motu-mk5d.service
 install -Dm644 install/systemd/wireplumber-motu-mk5.conf %{buildroot}%{_datadir}/motu-mk5/wireplumber-motu-mk5.conf
+install -Dm644 install/pipewire-pulse/50-motu-wine-routing.conf %{buildroot}%{_datadir}/motu-mk5/50-motu-wine-routing.conf
 
 %post
 udevadm control --reload-rules 2>/dev/null || true
@@ -38,6 +39,8 @@ for d in /home/*; do
     [ -d "$d" ] || continue
     install -Dm644 %{_datadir}/motu-mk5/wireplumber-motu-mk5.conf \
         "$d/.config/systemd/user/wireplumber.service.d/motu-mk5.conf" 2>/dev/null || true
+    install -Dm644 %{_datadir}/motu-mk5/50-motu-wine-routing.conf \
+        "$d/.config/pipewire/pipewire-pulse.conf.d/50-motu-wine-routing.conf" 2>/dev/null || true
     sed -i '/alsa_card.usb-MOTU_UltraLite/d' "$d/.local/state/wireplumber/default-profile" 2>/dev/null || true
 done
 loginctl list-users --no-legend 2>/dev/null | awk '{print $1}' | while read -r uid; do
@@ -60,6 +63,8 @@ if [ "$1" -eq 0 ]; then
         [ -d "$d" ] || continue
         rm -f "$d/.config/systemd/user/wireplumber.service.d/motu-mk5.conf" 2>/dev/null || true
         rmdir "$d/.config/systemd/user/wireplumber.service.d" 2>/dev/null || true
+        rm -f "$d/.config/pipewire/pipewire-pulse.conf.d/50-motu-wine-routing.conf" 2>/dev/null || true
+        rmdir "$d/.config/pipewire/pipewire-pulse.conf.d" 2>/dev/null || true
     done
 fi
 
@@ -71,5 +76,6 @@ fi
 %{_datadir}/alsa-card-profile/mixer/profile-sets/motu-ultralite-mk5.conf
 %{_datadir}/wireplumber/main.lua.d/51-motu-mk5.lua
 %{_datadir}/motu-mk5/wireplumber-motu-mk5.conf
+%{_datadir}/motu-mk5/50-motu-wine-routing.conf
 %config(noreplace) %{_sysconfdir}/udev/rules.d/89-motu-mk5.rules
 %{_prefix}/lib/systemd/user/motu-mk5d.service

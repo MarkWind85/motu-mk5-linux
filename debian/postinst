@@ -11,6 +11,9 @@ for d in /home/*; do
     # Install WirePlumber drop-in to clear stale MOTU profile cache on every start
     install -Dm644 /usr/share/motu-mk5/wireplumber-motu-mk5.conf \
         "$d/.config/systemd/user/wireplumber.service.d/motu-mk5.conf" 2>/dev/null || true
+    # Install Wine/Proton audio routing (routes to 2ch stereo loopback)
+    install -Dm644 /usr/share/motu-mk5/50-motu-wine-routing.conf \
+        "$d/.config/pipewire/pipewire-pulse.conf.d/50-motu-wine-routing.conf" 2>/dev/null || true
     # Clear stale MOTU profile cache
     sed -i '/alsa_card.usb-MOTU_UltraLite/d' "$d/.local/state/wireplumber/default-profile" 2>/dev/null || true
 done
