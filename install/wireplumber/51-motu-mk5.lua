@@ -14,3 +14,16 @@ table.insert(alsa_monitor.rules, {
     ["device.profile"] = "pro-audio",
   },
 })
+
+-- Pro-audio ALSA nodes are externally managed; don't save/restore volume
+table.insert(stream_defaults.rules, {
+  matches = {
+    {
+      { "node.name", "matches", "alsa_*put.usb-MOTU_UltraLite*" },
+    },
+  },
+  apply_properties = {
+    ["state.restore-props"] = false,
+    ["state.restore-target"] = false,
+  },
+})

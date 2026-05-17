@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.1
+
+- **Fix ALSA sink volume drift**: WirePlumber's stream restore was saving and re-applying volume changes on the pro-audio ALSA sink, causing it to drift from 100% after device reconnects or desktop volume adjustments. The WirePlumber config now sets `state.restore-props = false` on MOTU ALSA nodes so volume is managed exclusively by the hardware. Cleaned up stale state entries from previous card enumerations that contained poisoned default volumes.
+
 ## 0.5.0
 
 Three releases worth of work shipped together: runtime resilience, installation reliability, and user-facing diagnostics. Updating from 0.2.1 to 0.5.0 gives you all of the below.

@@ -64,9 +64,9 @@ Download the package for your distro from [Releases](https://github.com/MarkWind
 
 | Distro | Command |
 |---|---|
-| Debian / Ubuntu / Pop!_OS | `sudo dpkg -i motu-mk5_0.5.0-1_amd64.deb` |
-| Fedora / RHEL | `sudo dnf install motu-mk5-0.5.0-1.fc40.x86_64.rpm` |
-| Arch Linux | `sudo pacman -U motu-mk5-0.5.0-1-x86_64.pkg.tar.zst` |
+| Debian / Ubuntu / Pop!_OS | `sudo dpkg -i motu-mk5_0.5.1-1_amd64.deb` |
+| Fedora / RHEL | `sudo dnf install motu-mk5-0.5.1-1.fc40.x86_64.rpm` |
+| Arch Linux | `sudo pacman -U motu-mk5-0.5.1-1-x86_64.pkg.tar.zst` |
 
 The installer configures everything automatically — ALSA profile, WirePlumber rules, udev detection, systemd service, and Wine/Proton routing. Audio stack is restarted during install (brief interruption).
 
