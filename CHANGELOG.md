@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.2
+
+- **Fix broken daemon service on all distribution packages**: Installing the `.deb`, `.rpm`, or Arch package on a clean system would leave the service in a permanent failed state with `status=203/EXEC`. The shipped systemd unit hardcoded `ExecStart=/usr/local/bin/motu-mk5d`, but all three packagers install the binary to `/usr/bin/`. The bug affected every package user since 0.5.0 — the only reason it went unnoticed is that anyone upgrading from a previous `make install` had a leftover `/usr/local/bin/motu-mk5d` that happened to mask the broken path (while silently running stale code). The unit file is now templated (`@BINDIR@`) and each packager substitutes its bindir at package time. `make install` continues to use `PREFIX/bin` (defaults to `/usr/local/bin`) and is unaffected.
+
+- **Fix non-functional systemd restart limit**: The unit's `StartLimitIntervalSec=60` directive was in `[Service]` instead of `[Unit]`, where systemd silently ignores it (logging `Unknown key name 'StartLimitIntervalSec'` on every daemon-reload). The crash-loop protection added in 0.5.0 was therefore inactive — a misbehaving daemon would restart indefinitely instead of stopping after 5 failures in 60 seconds. Moved to the correct section.
+
+- **Fix stale package cache in Arch Docker builder**: The `pkg/build-packages.sh arch` build would intermittently fail with `404` errors from Arch mirrors when the cached Docker layer's pacman DB pointed at package versions that had since been replaced. Added `pacman -Syy` before `makepkg` so the dependency download always uses an up-to-date package list.
+
 ## 0.5.1
 
 - **Fix ALSA sink volume drift**: WirePlumber's stream restore was saving and re-applying volume changes on the pro-audio ALSA sink, causing it to drift from 100% after device reconnects or desktop volume adjustments. The WirePlumber config now sets `state.restore-props = false` on MOTU ALSA nodes so volume is managed exclusively by the hardware. Cleaned up stale state entries from previous card enumerations that contained poisoned default volumes.

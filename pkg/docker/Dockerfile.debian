@@ -5,6 +5,7 @@ RUN cargo install cargo-deb
 WORKDIR /build
 COPY . .
 
+RUN sed -i 's|@BINDIR@|/usr/bin|g' install/systemd/motu-mk5d.service
 RUN cargo build --release
 RUN cargo deb --no-build
 

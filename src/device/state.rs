@@ -110,6 +110,11 @@ impl DeviceManager {
         Ok(count)
     }
 
+    // FIXME(#4): silently pushes every writable saved property back to the
+    // device on each reconnect, including main_trim / output_trim which encode
+    // attenuation in dB (0-100 -> 0 to -100 dB). A stale non-zero trim value
+    // attenuates the hardware on every reconnect with no user-visible signal.
+    // See https://github.com/MarkWind85/motu-mk5-linux/issues/4
     pub fn restore_to_device(&mut self) -> Result<usize> {
         let mut count = 0;
 

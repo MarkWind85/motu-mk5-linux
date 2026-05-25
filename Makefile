@@ -29,6 +29,7 @@ install: build preflight
 	install -Dm644 install/udev/89-motu-mk5.rules $(UDEVDIR)/89-motu-mk5.rules
 	install -Dm644 install/wireplumber/51-motu-mk5.lua $(WPDIR)/51-motu-mk5.lua
 	install -Dm644 install/systemd/motu-mk5d.service $(SYSTEMD_USER_DIR)/motu-mk5d.service
+	sed -i 's|@BINDIR@|$(BINDIR)|g' $(SYSTEMD_USER_DIR)/motu-mk5d.service
 	install -Dm644 install/systemd/wireplumber-motu-mk5.conf $(SYSTEMD_USER_DIR)/wireplumber.service.d/motu-mk5.conf
 	install -Dm644 install/pipewire-pulse/50-motu-wine-routing.conf $(PULSE_CONFDIR)/50-motu-wine-routing.conf
 	udevadm control --reload-rules || true

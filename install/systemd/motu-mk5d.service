@@ -2,14 +2,14 @@
 Description=MOTU UltraLite mk5 control daemon
 Documentation=https://github.com/MarkWind85/motu-mk5-linux
 After=pipewire.service
+StartLimitBurst=5
+StartLimitIntervalSec=60
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/motu-mk5d
+ExecStart=@BINDIR@/motu-mk5d
 Restart=on-failure
 RestartSec=3
-StartLimitBurst=5
-StartLimitIntervalSec=60
 
 [Install]
 WantedBy=default.target
