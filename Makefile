@@ -3,6 +3,7 @@ BINDIR = $(PREFIX)/bin
 UDEVDIR = /etc/udev/rules.d
 ACPDIR = /usr/share/alsa-card-profile/mixer/profile-sets
 WPDIR = $(HOME)/.config/wireplumber/main.lua.d
+WPCONFDIR = $(HOME)/.config/wireplumber/wireplumber.conf.d
 SYSTEMD_USER_DIR = $(HOME)/.config/systemd/user
 PULSE_CONFDIR = $(HOME)/.config/pipewire/pipewire-pulse.conf.d
 
@@ -28,6 +29,7 @@ install: build preflight
 	install -Dm644 install/alsa-card-profile/motu-ultralite-mk5.conf $(ACPDIR)/motu-ultralite-mk5.conf
 	install -Dm644 install/udev/89-motu-mk5.rules $(UDEVDIR)/89-motu-mk5.rules
 	install -Dm644 install/wireplumber/51-motu-mk5.lua $(WPDIR)/51-motu-mk5.lua
+	install -Dm644 install/wireplumber/51-motu-mk5.conf $(WPCONFDIR)/51-motu-mk5.conf
 	install -Dm644 install/systemd/motu-mk5d.service $(SYSTEMD_USER_DIR)/motu-mk5d.service
 	sed -i 's|@BINDIR@|$(BINDIR)|g' $(SYSTEMD_USER_DIR)/motu-mk5d.service
 	install -Dm644 install/systemd/wireplumber-motu-mk5.conf $(SYSTEMD_USER_DIR)/wireplumber.service.d/motu-mk5.conf
@@ -55,6 +57,7 @@ uninstall:
 	rm -f $(ACPDIR)/motu-ultralite-mk5.conf
 	rm -f $(UDEVDIR)/89-motu-mk5.rules
 	rm -f $(WPDIR)/51-motu-mk5.lua
+	rm -f $(WPCONFDIR)/51-motu-mk5.conf
 	rm -f $(SYSTEMD_USER_DIR)/motu-mk5d.service
 	rm -rf $(SYSTEMD_USER_DIR)/wireplumber.service.d/motu-mk5.conf
 	rm -f $(PULSE_CONFDIR)/50-motu-wine-routing.conf

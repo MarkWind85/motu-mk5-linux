@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
 use log::{info, debug};
@@ -86,17 +86,25 @@ impl DeviceManager {
     }
 
     pub fn sync_from_device(&mut self) -> Result<usize> {
-        let timeout = Duration::from_millis(500);
+        // The device streams property updates continuously while signal is
+        // present (meter data), so waiting for a quiet window alone can block
+        // forever. The deadline bounds the initial sync; anything that arrives
+        // later is folded in by process_incoming().
+        let quiet = Duration::from_millis(500);
+        let deadline = Instant::now() + Duration::from_secs(5);
         let mut count = 0;
 
         loop {
-            match self.conn.recv_timeout(timeout) {
+            match self.conn.recv_timeout(quiet) {
                 Ok(Some((prop_id, index, data))) => {
                     if let Some(def) = properties::find_by_id(prop_id) {
                         if let Some(value) = PropertyValue::decode(def.prop_type, &data) {
                             self.state.set(def.name, index as usize, value);
                             count += 1;
                         }
+                    }
+                    if Instant::now() >= deadline {
+                        break;
                     }
                 }
                 Ok(None) => break,
@@ -160,6 +168,10 @@ impl DeviceManager {
     }
 
     pub fn process_incoming(&mut self) -> Result<usize> {
+        // Bounded batch: a continuously-streaming device would otherwise keep
+        // this drain loop running forever, starving the caller (router upkeep,
+        // shutdown flag, state saves).
+        let deadline = Instant::now() + Duration::from_millis(100);
         let mut count = 0;
         loop {
             match self.conn.recv() {
@@ -169,6 +181,9 @@ impl DeviceManager {
                             self.state.set(def.name, index as usize, value);
                             count += 1;
                         }
+                    }
+                    if Instant::now() >= deadline {
+                        break;
                     }
                 }
                 Ok(None) => break,

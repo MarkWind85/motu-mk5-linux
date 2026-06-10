@@ -1,7 +1,7 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::Result;
 use log::{error, info, warn};
@@ -58,26 +58,21 @@ fn main() -> Result<()> {
             Some(r)
         }
         None => {
-            error!("MOTU ALSA nodes not found after 10 attempts. Audio routing unavailable. \
+            error!("MOTU ALSA nodes not found after 10 attempts. Audio routing unavailable \
+                    until the device appears — will keep checking every 30s. \
                     Check that PipeWire is running and the device is connected.");
             None
         }
     };
+
+    let mut next_discovery = Instant::now() + DISCOVERY_RETRY_INTERVAL;
 
     loop {
         if !running.load(Ordering::Relaxed) {
             break;
         }
 
-        if let Some(ref mut r) = router {
-            if !r.is_running() {
-                warn!("audio router died, restarting");
-                r.stop();
-                if let Err(e) = r.start() {
-                    error!("audio router restart failed: {e}. Check that pw-loopback is installed.");
-                }
-            }
-        }
+        maintain_router(&mut router, &mut next_discovery);
 
         match DeviceManager::connect() {
             Ok(mut mgr) => {
@@ -117,15 +112,7 @@ fn main() -> Result<()> {
                         }
                     }
 
-                    if let Some(ref mut r) = router {
-                        if !r.is_running() {
-                            warn!("audio router died, restarting");
-                            r.stop();
-                            if let Err(e) = r.start() {
-                                error!("audio router restart failed: {e}. Check that pw-loopback is installed.");
-                            }
-                        }
-                    }
+                    maintain_router(&mut router, &mut next_discovery);
 
                     thread::sleep(Duration::from_millis(10));
                 }
@@ -159,6 +146,41 @@ fn main() -> Result<()> {
 
     info!("motu-mk5d stopped");
     Ok(())
+}
+
+const DISCOVERY_RETRY_INTERVAL: Duration = Duration::from_secs(30);
+
+/// Keep a dead router restarted, and keep looking for the MOTU ALSA nodes if
+/// the device wasn't there at startup (late USB enumeration, device powered
+/// on after boot). Discovery retries are silent; success is logged.
+fn maintain_router(router: &mut Option<AudioRouter>, next_discovery: &mut Instant) {
+    match router {
+        Some(r) => {
+            if !r.is_running() {
+                warn!("audio router died, restarting");
+                r.stop();
+                if let Err(e) = r.start() {
+                    error!("audio router restart failed: {e}. Check that pw-loopback is installed.");
+                }
+            }
+        }
+        None => {
+            if Instant::now() < *next_discovery {
+                return;
+            }
+            *next_discovery = Instant::now() + DISCOVERY_RETRY_INTERVAL;
+            if let Ok((alsa_output, alsa_input)) = discover_alsa_nodes() {
+                info!("MOTU ALSA nodes appeared, starting audio router");
+                info!("ALSA output: {alsa_output}");
+                info!("ALSA input:  {alsa_input}");
+                let mut r = AudioRouter::new(alsa_output, alsa_input);
+                if let Err(e) = r.start() {
+                    error!("audio router failed to start: {e}. Check that pw-loopback is installed (part of pipewire package).");
+                }
+                *router = Some(r);
+            }
+        }
+    }
 }
 
 fn ctrlc_handler(running: Arc<AtomicBool>) {

@@ -14,8 +14,9 @@ for d in /home/*; do
     [ -d "$d" ] || continue
     user=$(basename "$d")
 
-    # Remove legacy user-local WirePlumber rule (older Makefile installed here, shadows the system rule)
+    # Remove legacy user-local WirePlumber rules (older Makefile installed here, shadows the system rule)
     rm -f "$d/.config/wireplumber/main.lua.d/51-motu-mk5.lua" 2>/dev/null || true
+    rm -f "$d/.config/wireplumber/wireplumber.conf.d/51-motu-mk5.conf" 2>/dev/null || true
 
     # Install WirePlumber drop-in to clear stale MOTU profile cache on every start
     if ! install -Dm644 /usr/share/motu-mk5/wireplumber-motu-mk5.conf \

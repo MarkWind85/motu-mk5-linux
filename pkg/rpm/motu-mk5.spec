@@ -1,5 +1,5 @@
 Name:           motu-mk5
-Version:        0.5.2
+Version:        0.5.3
 Release:        1%{?dist}
 Summary:        Native Linux integration for the MOTU UltraLite mk5
 License:        GPL-2.0-or-later
@@ -27,6 +27,7 @@ install -Dm755 target/release/motu-mk5d %{buildroot}%{_bindir}/motu-mk5d
 install -Dm755 target/release/motu-ctl %{buildroot}%{_bindir}/motu-ctl
 install -Dm644 install/alsa-card-profile/motu-ultralite-mk5.conf %{buildroot}%{_datadir}/alsa-card-profile/mixer/profile-sets/motu-ultralite-mk5.conf
 install -Dm644 install/wireplumber/51-motu-mk5.lua %{buildroot}%{_datadir}/wireplumber/main.lua.d/51-motu-mk5.lua
+install -Dm644 install/wireplumber/51-motu-mk5.conf %{buildroot}%{_datadir}/wireplumber/wireplumber.conf.d/51-motu-mk5.conf
 install -Dm644 install/udev/89-motu-mk5.rules %{buildroot}%{_sysconfdir}/udev/rules.d/89-motu-mk5.rules
 install -Dm644 install/systemd/motu-mk5d.service %{buildroot}%{_prefix}/lib/systemd/user/motu-mk5d.service
 sed -i 's|@BINDIR@|%{_bindir}|g' %{buildroot}%{_prefix}/lib/systemd/user/motu-mk5d.service
@@ -42,6 +43,7 @@ for d in /home/*; do
     [ -d "$d" ] || continue
     user=$(basename "$d")
     rm -f "$d/.config/wireplumber/main.lua.d/51-motu-mk5.lua" 2>/dev/null || true
+    rm -f "$d/.config/wireplumber/wireplumber.conf.d/51-motu-mk5.conf" 2>/dev/null || true
     if ! install -Dm644 %{_datadir}/motu-mk5/wireplumber-motu-mk5.conf \
         "$d/.config/systemd/user/wireplumber.service.d/motu-mk5.conf" 2>/dev/null; then
         echo "WARNING: failed to install WirePlumber config for $user" >&2
@@ -96,6 +98,7 @@ fi
 %{_bindir}/motu-ctl
 %{_datadir}/alsa-card-profile/mixer/profile-sets/motu-ultralite-mk5.conf
 %{_datadir}/wireplumber/main.lua.d/51-motu-mk5.lua
+%{_datadir}/wireplumber/wireplumber.conf.d/51-motu-mk5.conf
 %{_datadir}/motu-mk5/wireplumber-motu-mk5.conf
 %{_datadir}/motu-mk5/50-motu-wine-routing.conf
 %config(noreplace) %{_sysconfdir}/udev/rules.d/89-motu-mk5.rules

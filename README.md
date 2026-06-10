@@ -64,9 +64,9 @@ Download the package for your distro from [Releases](https://github.com/MarkWind
 
 | Distro | Command |
 |---|---|
-| Debian / Ubuntu / Pop!_OS | `sudo dpkg -i motu-mk5_0.5.2-1_amd64.deb` |
-| Fedora / RHEL | `sudo dnf install motu-mk5-0.5.2-1.fc40.x86_64.rpm` |
-| Arch Linux | `sudo pacman -U motu-mk5-0.5.2-1-x86_64.pkg.tar.zst` |
+| Debian / Ubuntu / Pop!_OS | `sudo dpkg -i motu-mk5_0.5.3-1_amd64.deb` |
+| Fedora / RHEL | `sudo dnf install motu-mk5-0.5.3-1.fc40.x86_64.rpm` |
+| Arch Linux | `sudo pacman -U motu-mk5-0.5.3-1-x86_64.pkg.tar.zst` |
 
 The installer configures everything automatically — ALSA profile, WirePlumber rules, udev detection, systemd service, and Wine/Proton routing. Audio stack is restarted during install (brief interruption).
 
@@ -153,7 +153,8 @@ The daemon (`motu-mk5d`) manages two independent subsystems:
 | File | Path | Purpose |
 |---|---|---|
 | `motu-ultralite-mk5.conf` | `/usr/share/alsa-card-profile/mixer/profile-sets/` | ALSA Card Profile — channel mapping definitions |
-| `51-motu-mk5.lua` | WirePlumber config dir | Sets pro-audio profile on the MOTU device |
+| `51-motu-mk5.conf` | `/usr/share/wireplumber/wireplumber.conf.d/` | Sets pro-audio profile on the MOTU device (WirePlumber 0.5+) |
+| `51-motu-mk5.lua` | WirePlumber config dir | Same rules for WirePlumber 0.4 (legacy Lua) |
 | `89-motu-mk5.rules` | `/etc/udev/rules.d/` | udev — device detection, profile set assignment |
 | `motu-mk5d.service` | systemd user service dir | Control daemon auto-start |
 | `motu-mk5d` | `/usr/bin/` | Daemon — audio router + WebSocket device control |
