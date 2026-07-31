@@ -1,5 +1,5 @@
 Name:           motu-mk5
-Version:        0.5.3
+Version:        0.5.4
 Release:        1%{?dist}
 Summary:        Native Linux integration for the MOTU UltraLite mk5
 License:        GPL-2.0-or-later

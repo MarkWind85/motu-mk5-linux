@@ -1,10 +1,11 @@
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::thread;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
-use log::{info, debug};
+use log::{info, debug, warn};
 use serde::{Deserialize, Serialize};
 
 use crate::protocol::{properties, types::*};
@@ -19,7 +20,7 @@ pub struct DeviceState {
 }
 
 impl DeviceState {
-    fn state_path() -> PathBuf {
+    pub fn state_path() -> PathBuf {
         let config_dir = dirs_or_default();
         config_dir.join(STATE_DIR).join(STATE_FILE)
     }
@@ -72,17 +73,39 @@ impl DeviceState {
     }
 }
 
+/// Saved values that must never be pushed back to the device. Both encode
+/// output attenuation in dB, so a stale value silently changes monitoring
+/// level with nothing on screen to explain it.
+/// See https://github.com/MarkWind85/motu-mk5-linux/issues/4
+const NEVER_RESTORE: &[&str] = &["main_trim", "output_trim"];
+
+/// Past this many differing properties the saved state no longer plausibly
+/// describes the attached device, and restoring it would do more harm than
+/// leaving the device alone. Sized well above a real repair — recovering a
+/// device whose stored settings had been corrupted took 63 writes — because
+/// what protects the firmware is the pacing below, not the ceiling.
+const MAX_RESTORE_WRITES: usize = 256;
+
+/// The mk5 closes the WebSocket if property writes arrive faster than it
+/// applies them.
+const WRITE_PACING: Duration = Duration::from_millis(20);
+
 pub struct DeviceManager {
     conn: DeviceConnection,
     pub state: DeviceState,
+    /// On-disk state as it was at connect time. `state` is overwritten by
+    /// `sync_from_device`, so the saved values need their own copy to stay
+    /// comparable.
+    desired: DeviceState,
 }
 
 impl DeviceManager {
     pub fn connect() -> Result<Self> {
         let conn = DeviceConnection::open()?;
         let state = DeviceState::load();
+        let desired = state.clone();
         info!("device manager ready");
-        Ok(DeviceManager { conn, state })
+        Ok(DeviceManager { conn, state, desired })
     }
 
     pub fn sync_from_device(&mut self) -> Result<usize> {
@@ -118,31 +141,59 @@ impl DeviceManager {
         Ok(count)
     }
 
-    // FIXME(#4): silently pushes every writable saved property back to the
-    // device on each reconnect, including main_trim / output_trim which encode
-    // attenuation in dB (0-100 -> 0 to -100 dB). A stale non-zero trim value
-    // attenuates the hardware on every reconnect with no user-visible signal.
-    // See https://github.com/MarkWind85/motu-mk5-linux/issues/4
+    /// Writes back only the saved values the device does not already hold.
+    ///
+    /// Call after `sync_from_device`, which fills `state` with what the device
+    /// reports; anything the device never reported is left alone, since there
+    /// is no reading to justify a write against.
     pub fn restore_to_device(&mut self) -> Result<usize> {
-        let mut count = 0;
+        let mut pending = Vec::new();
 
         for def in properties::PROPERTIES {
-            if !def.writable {
+            if !def.writable || NEVER_RESTORE.contains(&def.name) {
                 continue;
             }
-            if let Some(values) = self.state.values.get(def.name) {
-                for (i, val) in values.iter().enumerate() {
-                    let data = val.encode();
-                    self.conn.send_property(def.id, i as u16, &data)?;
-                    count += 1;
+
+            let desired = match self.desired.values.get(def.name) {
+                Some(v) => v,
+                None => continue,
+            };
+            let current = match self.state.values.get(def.name) {
+                Some(v) => v,
+                None => continue,
+            };
+
+            for (i, want) in desired.iter().enumerate() {
+                if current.get(i) != Some(want) {
+                    pending.push((def.id, i as u16, want.encode(), def.name));
                 }
             }
         }
 
-        if count > 0 {
-            info!("restored {count} properties to device");
+        if pending.is_empty() {
+            debug!("device already matches saved state");
+            return Ok(0);
         }
-        Ok(count)
+
+        if pending.len() > MAX_RESTORE_WRITES {
+            warn!(
+                "saved state differs from the device in {} properties, over the {MAX_RESTORE_WRITES} \
+                 limit — not restoring. The device keeps its own settings. Delete {} to stop \
+                 seeing this.",
+                pending.len(),
+                DeviceState::state_path().display()
+            );
+            return Ok(0);
+        }
+
+        for (id, index, data, name) in &pending {
+            self.conn.send_property(*id, *index, data)?;
+            debug!("restored {name}[{index}]");
+            thread::sleep(WRITE_PACING);
+        }
+
+        info!("restored {} properties to device", pending.len());
+        Ok(pending.len())
     }
 
     pub fn set_property(&mut self, name: &str, index: u16, value: PropertyValue) -> Result<()> {
